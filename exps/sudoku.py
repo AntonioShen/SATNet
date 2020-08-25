@@ -220,7 +220,9 @@ def main():
     for epoch in range(1, args.nEpoch+1):
         train(args.boardSz, epoch, model, optimizer, train_logger, train_set, args.batchSz, unperm)
         test(args.boardSz, epoch, model, optimizer, test_logger, test_set, args.testBatchSz, unperm)
-        #torch.save(model.state_dict(), os.path.join(save, 'it'+str(epoch)+'.pth'))
+
+        if epoch % 5 == 0:
+            torch.save(model.state_dict(), os.path.join(save, 'it'+str(epoch)+'.pth'))
 
 def process_inputs(X, Ximg, Y, boardSz):
     is_input = X.sum(dim=3, keepdim=True).expand_as(X).int().sign()

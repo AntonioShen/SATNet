@@ -32,14 +32,17 @@ def main():
     parser.add_argument('--testPct', type=float, default=0.1)
     parser.add_argument('--batchSz', type=int, default=100)
     parser.add_argument('--testBatchSz', type=int, default=500)
-    parser.add_argument('--nEpoch', type=int, default=100)
+    parser.add_argument('--nEpoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-1)
     parser.add_argument('--seq', type=int, default=20)
     parser.add_argument('--save', type=str)
+    parser.add_argument('--model', type=str)
     parser.add_argument('--m', type=int, default=4)
     parser.add_argument('--aux', type=int, default=4)
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--adam', action='store_true')
+    parser.add_argument('--train', action='store_true')
+    parser.add_argument('--extract-clauses', action='store_true')
 
     args = parser.parse_args()
 
@@ -87,6 +90,9 @@ def main():
     test_set =  TensorDataset(X[nTrain:], test_is_input, Y[nTrain:])
 
     model = satnet.SATNet(3, args.m, args.aux, prox_lam=1e-1)
+    if args.model:
+        model.load_state_dict(torch.load(args.model))
+
     if args.cuda: model = model.cuda()
 
     if args.adam:
@@ -100,10 +106,45 @@ def main():
     train_logger.log(fields)
     test_logger.log(fields)
 
-    test(0, model, optimizer, test_logger, test_set, args.testBatchSz)
-    for epoch in range(1, args.nEpoch+1):
-        train(epoch, model, optimizer, train_logger, train_set, args.batchSz)
-        test(epoch, model, optimizer, test_logger, test_set, args.testBatchSz)
+    if args.train:
+        test(0, model, optimizer, test_logger, test_set, args.testBatchSz)
+
+        for epoch in range(1, args.nEpoch+1):
+            train(epoch, model, optimizer, train_logger, train_set, args.batchSz)
+            test(epoch, model, optimizer, test_logger, test_set, args.testBatchSz)
+
+            if epoch % 2 == 0:
+                save_path = 'it'+str(epoch)+'.pth'
+                print(f'SAVING MODEL TO {save_path}')
+                torch.save(model.state_dict(), os.path.join(save, save_path))   
+
+    # Run clause extraction when batch size = 1.
+    if args.extract_clauses:
+        # FIXME: Constants here for now.
+        assert args.testBatchSz == 1
+        assert args.aux == 4
+        assert args.m == 4
+
+
+        test(0, model, optimizer, test_logger, TensorDataset(*test_set[0:1]), args.testBatchSz)
+        extract_clauses(model)
+
+def pretty_print(**kwargs):
+    for name, arg in kwargs.items():
+        print('='*10, name, '='*10)
+        print(arg)
+
+def extract_clauses(model):
+    D = torch.diag(
+        torch.sqrt(4*torch.norm(model.S, dim=0))
+    )
+    S_tilde = torch.round(model.S.mm(D))
+    pretty_print(S=model.S, S_shape=model.S.size(), D=D, S_tilde=S_tilde)
+    y = model(torch.FloatTensor([[0., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
+    x = torch.FloatTensor([1, -1, 1, 1, 1, -1, -1, 1]).cuda()
+    y_mine = S_tilde.t()*x
+    pretty_print(model_y=y, clauses=y_mine) 
+    return
 
 def apply_seq(net, zeros, batch_data, batch_is_inputs, batch_targets):
     y = torch.cat([batch_data[:,:2], zeros], dim=1)
