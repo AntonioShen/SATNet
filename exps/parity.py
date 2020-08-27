@@ -6,6 +6,7 @@ import os
 import sys
 import csv
 import shutil
+import math
 
 import numpy.random as npr
 
@@ -122,9 +123,8 @@ def main():
     if args.extract_clauses:
         # FIXME: Constants here for now.
         assert args.testBatchSz == 1
-        assert args.aux == 4
-        assert args.m == 4
-
+        assert args.m == 8
+        assert args.aux == 1
 
         test(0, model, optimizer, test_logger, TensorDataset(*test_set[0:1]), args.testBatchSz)
         extract_clauses(model)
@@ -135,14 +135,38 @@ def pretty_print(**kwargs):
         print(arg)
 
 def extract_clauses(model):
-    D = torch.diag(
-        torch.sqrt(4*torch.norm(model.S, dim=0))
-    )
-    S_tilde = torch.round(model.S.mm(D))
-    pretty_print(S=model.S, S_shape=model.S.size(), D=D, S_tilde=S_tilde)
-    y = model(torch.FloatTensor([[0., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
-    x = torch.FloatTensor([1, -1, 1, 1, 1, -1, -1, 1]).cuda()
-    y_mine = S_tilde.t()*x
+
+    S_tilde_final = []
+    for i in range(model.S.size()[1]):
+        S_prime = model.S[:, i].cpu()
+
+        min_error = None
+        num_vars = None
+        S_tilde_current = None
+        for threshold in range(1, model.S.size()[0] + 1):
+            D_neg1 = 1/math.sqrt(4*threshold)
+            topk = torch.topk(torch.abs(S_prime), threshold).indices
+            signs = S_prime[topk].sign()
+
+            S_tilde = torch.zeros(S_prime.size())
+            S_tilde[topk] = signs
+            S_ideal = S_tilde*D_neg1
+            error = torch.norm(S_ideal - S_prime)
+
+            if min_error is None or min_error > error:
+                min_error = error
+                num_vars = threshold
+                S_tilde_current = S_tilde
+
+        S_tilde_final.append(S_tilde_current)
+        print(f'Row {i} -- {num_vars} at {min_error}')
+
+    S_tilde = torch.stack(S_tilde_final)
+    pretty_print(S_tilde=S_tilde, S=model.S.t())
+
+    y = model(torch.FloatTensor([[1., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
+    x = torch.FloatTensor([-1, 1, 1, 1, 1])
+    y_mine = S_tilde*x
     pretty_print(model_y=y, clauses=y_mine) 
     return
 
