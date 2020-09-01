@@ -15,6 +15,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 
+from pysat.formula import WCNF
+from pysat.examples.rc2 import RC2
+from collections.abc import Iterable
+
 import satnet
 from tqdm.auto import tqdm
 
@@ -132,7 +136,41 @@ def main():
 def pretty_print(**kwargs):
     for name, arg in kwargs.items():
         print('='*10, name, '='*10)
-        print(arg)
+
+        # Vertical print of lists.
+        if isinstance(arg, Iterable):
+            print('[')
+            for item in arg:
+                print('  ', item)
+            print(']')
+
+        else:
+            print(arg)
+
+def verify_sat_solution(inputs, outputs, solutions):
+
+    pretty_print(sat_verify_inputs=inputs, sat_verify_outputs=outputs)
+
+    # Use sets for cleaner lookup.
+    solutions = [set(solution) for solution in solutions]
+    inputs = [set(input_) for input_ in inputs]
+    outputs = [set(output) for output in outputs]
+
+    pretty_print(xor_check=None)
+    for input_, output in zip(inputs, outputs):
+        valid_solution = []
+        for solution in solutions:
+            if input_.issubset(solution):
+                if output.issubset(solution):
+                    valid_solution.append(solution)
+                else:
+                    print(f'{solution} invalidates {input_, output}.')
+                    break
+        else:
+            if valid_solution:
+                print(f'{valid_solution} solve {input_, output}.')
+            else:
+                print(f'{input_, output} is not solved.')
 
 def extract_clauses(model):
 
@@ -163,6 +201,37 @@ def extract_clauses(model):
 
     S_tilde = torch.stack(S_tilde_final)
     pretty_print(S_tilde=S_tilde, S=model.S.t())
+
+    # MAXSAT - Solve S_tilde in order to assess whether SATNet learns correct clauses.
+    formatted_clauses = []
+    for clause in S_tilde.tolist():
+        formatted_clause = [int((i + 1)*element) for i, element in enumerate(clause) if element != 0]
+        formatted_clauses.append(formatted_clause)
+
+    formula = WCNF()
+    formula.extend(formatted_clauses)
+
+    solver = RC2(formula, verbose=0)
+
+    solutions = list(solver.enumerate())
+    pretty_print(solutions=solutions)
+
+    # Check XOR.
+    inputs = [
+        [2, 3,],
+        [2, -3,],
+        [-2, 3,],
+        [-2, -3,],
+    ]
+
+    outputs = [
+        [-4],
+        [4],
+        [4],
+        [-4],
+    ]
+
+    verify_sat_solution(inputs, outputs, solutions)
 
     y = model(torch.FloatTensor([[1., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
     x = torch.FloatTensor([-1, 1, 1, 1, 1])
