@@ -24,7 +24,6 @@ from torch.utils.data import TensorDataset, DataLoader
 
 from pysat.formula import WCNF
 from pysat.examples.rc2 import RC2
-from collections.abc import Iterable
 
 import satnet
 from tqdm.auto import tqdm
@@ -145,7 +144,7 @@ def pretty_print(**kwargs):
         print('='*10, name, '='*10)
 
         # Vertical print of lists.
-        if isinstance(arg, Iterable):
+        if isinstance(arg, list):
             print('[')
             for item in arg:
                 print('  ', item)
@@ -179,18 +178,19 @@ def verify_sat_solution(inputs, outputs, solutions):
             else:
                 print(f'{input_, output} is not solved.')
 
-def extract_clauses(model):
 
+def extract_s_tilde(S, verbose=True, extract_weights=True):
     S_tilde_final = []
     weights = []
-    for i in range(model.S.size()[1]):
-        S_prime = model.S[:, i].cpu()
+    errors = []
+    for i in range(S.size()[1]):
+        S_prime = S[:, i].cpu()
 
         min_error = None
         num_vars = None
         S_tilde_current = None
         C = None    
-        for threshold in range(1, model.S.size()[0] + 1):
+        for threshold in range(1, S.size()[0] + 1):
             D_neg1 = 1/math.sqrt(4*threshold)
             topk = torch.topk(torch.abs(S_prime), threshold).indices
             signs = S_prime[topk].sign()
@@ -199,22 +199,32 @@ def extract_clauses(model):
             S_tilde[topk] = signs
             S_ideal = S_tilde*D_neg1
 
+            if extract_weights:
+                for c in np.linspace(0, 10, 1000):
+                    error = torch.norm(S_ideal*c - S_prime)
 
-            for c in np.linspace(0, 10, 1000):
-                error = torch.norm(S_ideal*c - S_prime)
-
-                if min_error is None or min_error > error:
-                    min_error = error
-                    num_vars = threshold
-                    S_tilde_current = S_tilde
-                    C = round(c)
+                    if min_error is None or min_error > error:
+                        min_error = error
+                        num_vars = threshold
+                        S_tilde_current = S_tilde
+                        C = round(c)
 
         S_tilde_final.append(S_tilde_current)
         weights.append(C)
-        print(f'Row {i} -- {S_tilde_current} at {min_error} and C = {C}')
+        errors.append(min_error)
+
+        if verbose:
+            print(f'Row {i} -- {S_tilde_current} at {min_error} and C = {C}')
 
     S_tilde = torch.stack(S_tilde_final)
-    pretty_print(S_tilde=S_tilde, S=model.S.t())
+    error = sum(errors)
+
+    return S_tilde, weights, error
+
+def extract_clauses(model):
+
+    S_tilde, weights, error = extract_s_tilde(model.S)
+    pretty_print(S_tilde=S_tilde, S=model.S.t(), total_entries=int(torch.sum(torch.abs(S_tilde))))
 
     # MAXSAT - Solve S_tilde in order to assess whether SATNet learns correct clauses.
     formatted_clauses = []
@@ -261,7 +271,9 @@ def apply_seq(net, zeros, batch_data, batch_is_inputs, batch_targets):
     for i in range(L-2):
         y = torch.cat([y[:,-1].unsqueeze(1), batch_data[:,i+2].unsqueeze(1), zeros], dim=1)
         y = net(((y-0.5).sign()+1)/2, batch_is_inputs)
-    loss = F.binary_cross_entropy(y[:,-1], batch_targets[:,-1])
+
+    BETA = 0.005
+    loss = F.binary_cross_entropy(y[:,-1], batch_targets[:,-1]) + BETA*torch.sum(torch.abs(net.S))
     return loss, y
 
 def run(epoch, model, optimizer, logger, dataset, batchSz, to_train):
