@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+"""
+Run with:
+
+python exps/parity.py --batchSz 1 --testBatchSz 1 --m 8 --aux 1 --model logs/parity.aux1-m8-lr0.1-bsz100/it2.pth --extract-clauses
+"""
+
 import argparse
 
 import os
@@ -9,6 +15,7 @@ import shutil
 import math
 
 import numpy.random as npr
+import numpy as np
 
 import torch
 import torch.optim as optim
@@ -175,12 +182,14 @@ def verify_sat_solution(inputs, outputs, solutions):
 def extract_clauses(model):
 
     S_tilde_final = []
+    weights = []
     for i in range(model.S.size()[1]):
         S_prime = model.S[:, i].cpu()
 
         min_error = None
         num_vars = None
         S_tilde_current = None
+        C = None    
         for threshold in range(1, model.S.size()[0] + 1):
             D_neg1 = 1/math.sqrt(4*threshold)
             topk = torch.topk(torch.abs(S_prime), threshold).indices
@@ -189,15 +198,20 @@ def extract_clauses(model):
             S_tilde = torch.zeros(S_prime.size())
             S_tilde[topk] = signs
             S_ideal = S_tilde*D_neg1
-            error = torch.norm(S_ideal - S_prime)
 
-            if min_error is None or min_error > error:
-                min_error = error
-                num_vars = threshold
-                S_tilde_current = S_tilde
+
+            for c in np.linspace(0, 10, 1000):
+                error = torch.norm(S_ideal*c - S_prime)
+
+                if min_error is None or min_error > error:
+                    min_error = error
+                    num_vars = threshold
+                    S_tilde_current = S_tilde
+                    C = round(c)
 
         S_tilde_final.append(S_tilde_current)
-        print(f'Row {i} -- {num_vars} at {min_error}')
+        weights.append(C)
+        print(f'Row {i} -- {S_tilde_current} at {min_error} and C = {C}')
 
     S_tilde = torch.stack(S_tilde_final)
     pretty_print(S_tilde=S_tilde, S=model.S.t())
@@ -209,11 +223,12 @@ def extract_clauses(model):
         formatted_clauses.append(formatted_clause)
 
     formula = WCNF()
-    formula.extend(formatted_clauses)
+    formula.extend(formatted_clauses, weights=weights)
+    pretty_print(weights_hard=formula.hard, weights_soft=formula.soft)
 
     solver = RC2(formula, verbose=0)
 
-    solutions = list(solver.enumerate())
+    solutions = [f'{m} at weight {solver.cost}' for m in solver.enumerate()]
     pretty_print(solutions=solutions)
 
     # Check XOR.
