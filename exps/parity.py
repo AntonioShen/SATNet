@@ -21,6 +21,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
+torch.pi = torch.acos(torch.zeros(1)).item()
 
 from pysat.formula import WCNF
 from pysat.examples.rc2 import RC2
@@ -179,12 +180,12 @@ def verify_sat_solution(inputs, outputs, solutions):
                 print(f'{input_, output} is not solved.')
 
 
-def extract_s_tilde(S, verbose=True, extract_weights=True):
+def extract_s_tilde(S, verbose=True, extract_weights=False):
     S_tilde_final = []
     weights = []
-    errors = []
+    errors = torch.zeros(1).cuda()
     for i in range(S.size()[1]):
-        S_prime = S[:, i].cpu()
+        S_prime = S[:, i]
 
         min_error = None
         num_vars = None
@@ -195,7 +196,7 @@ def extract_s_tilde(S, verbose=True, extract_weights=True):
             topk = torch.topk(torch.abs(S_prime), threshold).indices
             signs = S_prime[topk].sign()
 
-            S_tilde = torch.zeros(S_prime.size())
+            S_tilde = torch.zeros(S_prime.size()).cuda()
             S_tilde[topk] = signs
             S_ideal = S_tilde*D_neg1
 
@@ -208,23 +209,29 @@ def extract_s_tilde(S, verbose=True, extract_weights=True):
                         num_vars = threshold
                         S_tilde_current = S_tilde
                         C = round(c)
+            else:
+                error = torch.norm(S_ideal - S_prime)
+                 
+                if min_error is None or min_error > error:
+                        min_error = error
+                        num_vars = threshold
+                        S_tilde_current = S_tilde
 
         S_tilde_final.append(S_tilde_current)
         weights.append(C)
-        errors.append(min_error)
+        errors += min_error
 
         if verbose:
             print(f'Row {i} -- {S_tilde_current} at {min_error} and C = {C}')
 
     S_tilde = torch.stack(S_tilde_final)
-    error = sum(errors)
 
-    return S_tilde, weights, error
+    return S_tilde, weights, errors
 
 def extract_clauses(model):
 
     S_tilde, weights, error = extract_s_tilde(model.S)
-    pretty_print(S_tilde=S_tilde, S=model.S.t(), total_entries=int(torch.sum(torch.abs(S_tilde))))
+    pretty_print(S_tilde=S_tilde, S=model.S.t(), total_entries=int(torch.sum(torch.abs(S_tilde))), error=error)
 
     # MAXSAT - Solve S_tilde in order to assess whether SATNet learns correct clauses.
     formatted_clauses = []
@@ -272,8 +279,9 @@ def apply_seq(net, zeros, batch_data, batch_is_inputs, batch_targets):
         y = torch.cat([y[:,-1].unsqueeze(1), batch_data[:,i+2].unsqueeze(1), zeros], dim=1)
         y = net(((y-0.5).sign()+1)/2, batch_is_inputs)
 
-    BETA = 0.005
-    loss = F.binary_cross_entropy(y[:,-1], batch_targets[:,-1]) + BETA*torch.sum(torch.abs(net.S))
+    BETA = 0.01
+    _, _, error = extract_s_tilde(net.S, verbose=False)
+    loss = F.binary_cross_entropy(y[:,-1], batch_targets[:,-1]) + BETA*error
     return loss, y
 
 def run(epoch, model, optimizer, logger, dataset, batchSz, to_train):
