@@ -29,6 +29,9 @@ from pysat.examples.rc2 import RC2
 import satnet
 from tqdm.auto import tqdm
 
+# Print options.
+torch.set_printoptions(threshold=5000)
+
 class CSVLogger(object):
     def __init__(self, fname):
         self.f = open(fname, 'w')
@@ -55,6 +58,7 @@ def main():
     parser.add_argument('--adam', action='store_true')
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--extract-clauses', action='store_true')
+    parser.add_argument('--override-weights', action='store_true')
 
     args = parser.parse_args()
 
@@ -101,9 +105,77 @@ def main():
     train_set = TensorDataset(X[:nTrain], train_is_input, Y[:nTrain])
     test_set =  TensorDataset(X[nTrain:], test_is_input, Y[nTrain:])
 
-    model = satnet.SATNet(3, args.m, args.aux, prox_lam=1e-1)
-    if args.model:
-        model.load_state_dict(torch.load(args.model))
+    if args.override_weights:
+        
+        def _3_sat_to_max_2_sat(S):
+            # Using https://math.stackexchange.com/questions/1633005/how-exactly-does-a-max-2-sat-reduce-to-a-3-sat
+            S = torch.FloatTensor(S)
+            S_prime = torch.zeros([S.size()[0]*10, S.size()[1] + S.size()[0]])
+            num_aux = len(S)
+
+            for aux, (t, l1, l2, l3) in enumerate(S):
+                aux_true = [0]*num_aux
+                aux_true[aux] = 1
+                aux_false = [0]*num_aux
+                aux_true[aux] = -1
+                aux_absent = [0]*num_aux
+
+                clauses = torch.FloatTensor([
+                    [-1, l1, 0, 0] + aux_absent,
+                    [-1, 0, l2, 0] + aux_absent,
+                    [-1, 0, 0, l3] + aux_absent,
+                    [-1, 0, 0, 0] + aux_true,
+                    [-1, -l1, -l2, 0] + aux_absent,
+                    [-1, 0, -l2, -l3] + aux_absent,
+                    [-1, -l1, 0, -l3] + aux_absent,
+                    [-1, l1, 0, 0] + aux_false,
+                    [-1, 0, l2, 0] + aux_false,
+                    [-1, 0, 0, l3] + aux_false,
+                ])
+                clauses[:4] *= 1/math.sqrt(4*3)
+                clauses[4:] *= 1/math.sqrt(4*4)
+
+                S_prime[aux*10:(aux + 1)*10] = clauses
+
+            return S_prime
+
+        # CNF -- works for all 2-input functions aside from XOR
+        S = _3_sat_to_max_2_sat([
+            [-1, 1, 1, -1],
+            [-1, 1, -1, 1],
+            [-1, -1, 1, 1],
+            [-1, -1, -1, 1],
+        ])
+
+        S = torch.FloatTensor([
+            [-1, 1, -1, 0, 0, -1],
+            [-1, -1, 1, 0, -1, 0],
+            [1, 0, 0, -1, 1, 1],
+            [0, 0, 0, 0, 0, 0],
+        ])
+        S *= 1/math.sqrt(4*3)
+
+        S = torch.FloatTensor(S)
+
+        model = satnet.SATNet(3, S.size()[0], S.size()[1] - 4, prox_lam=1e-1, eps=1e-4, max_iter=100)
+        model.S = torch.nn.Parameter(S.t())
+
+        # model = satnet.SATNet(3, 8, 1, prox_lam=1e-1)
+        # model.load_state_dict(torch.load('/data/logs/parity.aux1-m8-lr0.1-bsz100/it2.pth'))
+
+        for x in [
+            torch.FloatTensor([[0., 0., 0.]]),
+            torch.FloatTensor([[0., 1., 0.]]),
+            torch.FloatTensor([[1., 0., 0.]]),
+            torch.FloatTensor([[1., 1., 0.]]),
+        ]:
+            y = model(x, torch.IntTensor([[1, 1, 0]]))
+            print(f'x: {x} == {y}')
+    else:
+        model = satnet.SATNet(3, args.m, args.aux, prox_lam=1e-1)
+        if args.model:
+            model.load_state_dict(torch.load(args.model))
+        
 
     if args.cuda: model = model.cuda()
 
@@ -163,7 +235,16 @@ def verify_sat_solution(inputs, outputs, solutions):
     inputs = [set(input_) for input_ in inputs]
     outputs = [set(output) for output in outputs]
 
-    pretty_print(xor_check=None)
+    pretty_print(positive_check=None)
+    for input_, output in zip(inputs, outputs):
+        for solution in solutions:
+            if input_.issubset(solution) and output.issubset(solution):
+                print(f'{solution} solves {input_}, {output}.')
+                break
+        else:
+            print(f'No solution for {input_}, {output}')
+
+    pretty_print(negative_check=None)
     for input_, output in zip(inputs, outputs):
         valid_solution = []
         for solution in solutions:
@@ -181,6 +262,7 @@ def verify_sat_solution(inputs, outputs, solutions):
 
 
 def extract_s_tilde(S, verbose=True, extract_weights=False):
+    S = S.t()
     S_tilde_final = []
     weights = []
     errors = torch.zeros(1).cuda()
@@ -279,7 +361,7 @@ def apply_seq(net, zeros, batch_data, batch_is_inputs, batch_targets):
         y = torch.cat([y[:,-1].unsqueeze(1), batch_data[:,i+2].unsqueeze(1), zeros], dim=1)
         y = net(((y-0.5).sign()+1)/2, batch_is_inputs)
 
-    BETA = 0.01
+    BETA = 0
     _, _, error = extract_s_tilde(net.S, verbose=False)
     loss = F.binary_cross_entropy(y[:,-1], batch_targets[:,-1]) + BETA*error
     return loss, y

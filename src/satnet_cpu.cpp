@@ -177,6 +177,7 @@ void mix_forward(int max_iter, float eps, int n, int m, int k, const int32_t *in
     for (int i,i_=0; (i=index[i_]); i_++) {
         float zi = V[i*k];
         zi = saturate((zi+1)/2)*2-1;
+        // z1 = min(max(z1, -1), 1)
         zi = saturate(1-acosf(zi)/M_PI);
         z[i] = zi;
     }

@@ -15,6 +15,10 @@
 ## CNF
 (a ∨ b ∨ ¬x) ∧ (a ∨ ¬b ∨ x) ∧ (¬a ∨ b ∨ x) ∧ (¬a ∨ ¬b ∨ ¬x)
 
+## DNF
+(¬a ∧ ¬b ∧ ¬x) ∨ (a ∧ ¬b ∧ x) ∨ (¬a ∧ b ∧ x) ∨ (a ∧ b ∧ ¬x)
+
+
 ## S~ Matrix
 
 |  |  |  | |
