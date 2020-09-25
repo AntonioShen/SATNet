@@ -50,7 +50,7 @@ setup(
     version='0.1.2',
     install_requires=[
         'torch>=1.0',
-        'python-sat'
+        'python-sat',
         ],
     packages=['satnet'],
     ext_modules=ext_modules,

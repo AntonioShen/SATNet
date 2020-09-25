@@ -150,7 +150,7 @@ def main():
         S = torch.FloatTensor([
             [-1, 1, -1, 0, 0, -1],
             [-1, -1, 1, 0, -1, 0],
-            [1, 0, 0, -1, 1, 1],
+            [-1, 0, 0, 1, -1, -1],
             [0, 0, 0, 0, 0, 0],
         ])
         S *= 1/math.sqrt(4*3)
@@ -206,8 +206,8 @@ def main():
     if args.extract_clauses:
         # FIXME: Constants here for now.
         assert args.testBatchSz == 1
-        assert args.m == 8
-        assert args.aux == 1
+        assert args.m == 4
+        assert args.aux == 2
 
         test(0, model, optimizer, test_logger, TensorDataset(*test_set[0:1]), args.testBatchSz)
         extract_clauses(model)
@@ -262,7 +262,6 @@ def verify_sat_solution(inputs, outputs, solutions):
 
 
 def extract_s_tilde(S, verbose=True, extract_weights=False):
-    S = S.t()
     S_tilde_final = []
     weights = []
     errors = torch.zeros(1).cuda()
@@ -274,12 +273,19 @@ def extract_s_tilde(S, verbose=True, extract_weights=False):
         S_tilde_current = None
         C = None    
         for threshold in range(1, S.size()[0] + 1):
-            D_neg1 = 1/math.sqrt(4*threshold)
+            
             topk = torch.topk(torch.abs(S_prime), threshold).indices
             signs = S_prime[topk].sign()
 
             S_tilde = torch.zeros(S_prime.size()).cuda()
             S_tilde[topk] = signs
+            if S_tilde[0] != -1:
+                if S_tilde[0] != 1:
+                    threshold += 1
+
+                S_tilde[0] = -1
+                
+            D_neg1 = 1/math.sqrt(4*threshold)
             S_ideal = S_tilde*D_neg1
 
             if extract_weights:
@@ -321,13 +327,19 @@ def extract_clauses(model):
         formatted_clause = [int((i + 1)*element) for i, element in enumerate(clause) if element != 0]
         formatted_clauses.append(formatted_clause)
 
+    # formatted_clauses = [
+    #     [-1, 2, -3, -5],
+    #     [-1, -2, 3, -6],
+    #     [-1, 4, -5, -6],
+    # ]
+
     formula = WCNF()
     formula.extend(formatted_clauses, weights=weights)
     pretty_print(weights_hard=formula.hard, weights_soft=formula.soft)
 
     solver = RC2(formula, verbose=0)
 
-    solutions = [f'{m} at weight {solver.cost}' for m in solver.enumerate()]
+    solutions = [m for m in solver.enumerate()]
     pretty_print(solutions=solutions)
 
     # Check XOR.
@@ -347,10 +359,10 @@ def extract_clauses(model):
 
     verify_sat_solution(inputs, outputs, solutions)
 
-    y = model(torch.FloatTensor([[1., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
-    x = torch.FloatTensor([-1, 1, 1, 1, 1])
-    y_mine = S_tilde*x
-    pretty_print(model_y=y, clauses=y_mine) 
+    # y = model(torch.FloatTensor([[1., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
+    # x = torch.FloatTensor([-1, 1, 1, 1, 1])
+    # y_mine = S_tilde*x
+    # pretty_print(model_y=y, clauses=y_mine) 
     return
 
 def apply_seq(net, zeros, batch_data, batch_is_inputs, batch_targets):
@@ -361,7 +373,7 @@ def apply_seq(net, zeros, batch_data, batch_is_inputs, batch_targets):
         y = torch.cat([y[:,-1].unsqueeze(1), batch_data[:,i+2].unsqueeze(1), zeros], dim=1)
         y = net(((y-0.5).sign()+1)/2, batch_is_inputs)
 
-    BETA = 0
+    BETA = 0.1
     _, _, error = extract_s_tilde(net.S, verbose=False)
     loss = F.binary_cross_entropy(y[:,-1], batch_targets[:,-1]) + BETA*error
     return loss, y
