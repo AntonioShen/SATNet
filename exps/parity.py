@@ -3,7 +3,7 @@
 """
 Run with:
 
-python exps/parity.py --batchSz 1 --testBatchSz 1 --m 8 --aux 1 --model logs/parity.aux1-m8-lr0.1-bsz100/it2.pth --extract-clauses
+python exps/parity.py --batchSz 1 --testBatchSz 1 --m 4 --aux 2 --model logs/parity.aux2-m4-lr0.1-bsz100/it4.pth --extract-clauses
 """
 
 import argparse
@@ -226,7 +226,7 @@ def pretty_print(**kwargs):
         else:
             print(arg)
 
-def verify_sat_solution(inputs, outputs, solutions):
+def verify_sat_solution(inputs, outputs, solutions, clauses):
 
     pretty_print(sat_verify_inputs=inputs, sat_verify_outputs=outputs)
 
@@ -234,20 +234,37 @@ def verify_sat_solution(inputs, outputs, solutions):
     solutions = [set(solution) for solution in solutions]
     inputs = [set(input_) for input_ in inputs]
     outputs = [set(output) for output in outputs]
+    clauses = [set(clause) for clause in clauses]
+
+
+    scores = []
+    for solution in solutions:
+        scores.append(0)
+        for clause in clauses:
+            scores[-1] += len(solution.intersection(clause))
+    pretty_print(solution_scores=list(zip([sorted(list(solution), key=abs) for solution in solutions], scores)))
+
 
     pretty_print(positive_check=None)
+    best_solutions = []
     for input_, output in zip(inputs, outputs):
-        for solution in solutions:
-            if input_.issubset(solution) and output.issubset(solution):
-                print(f'{solution} solves {input_}, {output}.')
-                break
-        else:
+        best_solution = None
+        best_score = -1
+        for solution, score in zip(solutions, scores):
+            if input_.issubset(solution) and output.issubset(solution) and score > best_score:
+                best_score = score
+                best_solution = solution
+        
+        if best_score == -1:
             print(f'No solution for {input_}, {output}')
+        else:
+            best_solutions.append(best_solution)
+            print(f'{sorted(list(best_solution), key=abs)} solves {input_}, {output}, with a score of {best_score}.')
 
     pretty_print(negative_check=None)
     for input_, output in zip(inputs, outputs):
         valid_solution = []
-        for solution in solutions:
+        for solution in best_solutions:
             if input_.issubset(solution):
                 if output.issubset(solution):
                     valid_solution.append(solution)
@@ -357,7 +374,7 @@ def extract_clauses(model):
         [-4],
     ]
 
-    verify_sat_solution(inputs, outputs, solutions)
+    verify_sat_solution(inputs, outputs, solutions, formatted_clauses)
 
     # y = model(torch.FloatTensor([[1., 1., 0.]]).cuda(), torch.IntTensor([[1, 1, 0]]).cuda())
     # x = torch.FloatTensor([-1, 1, 1, 1, 1])
