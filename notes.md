@@ -32,3 +32,5 @@
 # Invocation
 
     python exps/parity.py --batchSz 1 --testBatchSz 1 --m 8 --aux 1 --model logs/parity.aux1-m8-lr0.1-bsz100/it2.pth --extract-clauses
+
+

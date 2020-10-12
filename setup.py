@@ -51,6 +51,7 @@ setup(
     install_requires=[
         'torch>=1.0',
         'python-sat',
+        'pytest',
         ],
     packages=['satnet'],
     ext_modules=ext_modules,
@@ -64,5 +65,10 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "License :: OSI Approved :: MIT License",
+    ],
+    scripts=[
+        'exps/parity.py',
+        'exps/sudoku.py',
+        'exps/traditional.py',
     ],
 )
