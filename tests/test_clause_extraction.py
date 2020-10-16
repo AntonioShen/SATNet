@@ -103,6 +103,7 @@ def sign(x):
 
 def check_clauses(model, expected_solutions, num_inputs, num_outputs):
     S_tilde, weights, error = extract_s_tilde(model.S, verbose=False, cuda=False)
+    print('S_TILDE', S_tilde)
 
     formatted_clauses = satnet_clauses_to_pysat(S_tilde)
 
@@ -155,21 +156,36 @@ def run_test(generation_function, batch_size = 128, num_epochs = 10, beta = 0.1,
             loss.backward()
             optimizer.step()
 
-            tloader.set_description(f'Epoch {i}: loss {loss}, accuracy {error}')
+            tloader.set_description(f'Epoch {i}: loss {float(loss):.3f}, accuracy {1 - float(error):.3f}, S~ error {float(s_tilde_error):.3f}')
 
-    print('------------------------------ddddddddddddddddddddddddddddddd', model.S, 1000*torch.randn_like(model.S))
-    model.S = torch.nn.Parameter(model.S + 1000*torch.randn_like(model.S))
+    # print('------------------------------ddddddddddddddddddddddddddddddd', model.S, 1000*torch.randn_like(model.S))
+    # model.S = torch.nn.Parameter(model.S + 1000*torch.randn_like(model.S))
+    S = torch.FloatTensor([
+            [-1, 1, -1, 0, 0, -1],
+            [-1, -1, 1, 0, -1, 0],
+            [-1, 0, 0, 1, -1, -1],
+            [0, 0, 0, 0, 0, 0],
+        ])
+
+    # S = torch.FloatTensor([
+    #         [-1, 1, 1, -1],
+    #         [-1, 1, -1, 1],
+    #         [-1, -1, 1, 1],
+    #         [-1, -1, -1, 1],
+    #     ])    
+    model.S = torch.nn.Parameter(S.t())
+
     assert check_clauses(model, solutions, num_inputs, num_outputs)
 
     
 def test_and():
-    run_test(generate_and_cnf)
+    run_test(generate_xor_cnf, beta=0.2, num_epochs=1)
 
-def test_or():
-    run_test(generate_and_cnf)
+# def test_or():
+#     run_test(generate_and_cnf)
 
-def test_xor():
-    run_test(generate_and_cnf)
+# def test_xor():
+#     run_test(generate_and_cnf)
 
 # @pytest.mark.parametrize('repeat', [i for i in range(10)])
 # def test_random(repeat):

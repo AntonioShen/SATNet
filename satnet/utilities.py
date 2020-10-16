@@ -52,11 +52,12 @@ def _3_sat_to_max_2_sat(S):
 
 def verify_sat_solution(inputs, outputs, solutions, clauses):
     success = True
-    pretty_print(sat_verify_inputs=inputs, sat_verify_outputs=outputs)
+    # pretty_print(sat_verify_inputs=inputs, sat_verify_outputs=outputs)
+    pretty_print(clauses=clauses)
 
     # Use sets for cleaner lookup.
     solutions = [set(solution) for solution in solutions]
-    inputs = [set(input_) for input_ in inputs]
+    inputs = [set(input_) | set([1]) for input_ in inputs]
     outputs = [set(output) for output in outputs]
     clauses = [set(clause) for clause in clauses]
 
@@ -66,20 +67,20 @@ def verify_sat_solution(inputs, outputs, solutions, clauses):
         scores.append(0)
         for clause in clauses:
             scores[-1] += len(solution.intersection(clause))
-    pretty_print(solution_scores=list(zip([sorted(list(solution), key=abs) for solution in solutions], scores)))
+    # pretty_print(solution_scores=list(zip([sorted(list(solution), key=abs) for solution in solutions], scores)))
 
 
     pretty_print(positive_check=None)
     best_solutions = []
     for input_, output in zip(inputs, outputs):
         best_solution = None
-        best_score = -1
+        best_score = float('inf') # -1
         for solution, score in zip(solutions, scores):
-            if input_.issubset(solution) and output.issubset(solution) and score > best_score:
+            if input_.issubset(solution) and score < best_score:
                 best_score = score
                 best_solution = solution
         
-        if best_score == -1:
+        if best_score == float('inf'): #-1:
             success = False
             print(f'No solution for {input_}, {output}')
         else:
@@ -131,7 +132,7 @@ def extract_s_tilde(S, verbose=True, extract_weights=False, cuda=True):
                 S_tilde = S_tilde.cuda()
 
             S_tilde[topk] = signs
-            if S_tilde[0] != -1:
+            if S_tilde[0] != -1 and torch.nonzero(S_tilde[1:]).size(0) > 0:
                 if S_tilde[0] != 1:
                     threshold += 1
 
@@ -172,7 +173,9 @@ def satnet_clauses_to_pysat(S_tilde):
     formatted_clauses = []
     for clause in S_tilde.tolist():
         formatted_clause = [int((i + 1)*element) for i, element in enumerate(clause) if element != 0]
-        formatted_clauses.append(formatted_clause)
+
+        if formatted_clause: # Don't add zero clauses.
+            formatted_clauses.append(formatted_clause)
 
     return formatted_clauses
 

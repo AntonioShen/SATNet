@@ -113,15 +113,13 @@ def main():
             [-1, -1, -1, 1],
         ])
 
-        S = torch.FloatTensor([
-            [-1, 1, -1, 0, 0, -1],
-            [-1, -1, 1, 0, -1, 0],
-            [-1, 0, 0, 1, -1, -1],
-            [0, 0, 0, 0, 0, 0],
-        ])
-        S *= 1/math.sqrt(4*3)
-
-        S = torch.FloatTensor(S)
+        # S = torch.FloatTensor([
+        #     [-1, 1, -1, 0, 0, -1],
+        #     [-1, -1, 1, 0, -1, 0],
+        #     [-1, 0, 0, 1, -1, -1],
+        #     [0, 0, 0, 0, 0, 0],
+        # ])
+        # S *= 1/math.sqrt(4*3)
 
         model = satnet.SATNet(3, S.size()[0], S.size()[1] - 4, prox_lam=1e-1, eps=1e-4, max_iter=100)
         model.S = torch.nn.Parameter(S.t())
