@@ -54,22 +54,57 @@ class DigitConv(nn.Module):
         x = self.fc2(x)
         return F.softmax(x, dim=1)[:,:9].contiguous()
 
+class DigitDeconv(nn.Module):
+    '''
+    Inverse of Conv Layer
+    '''
+    def __init__(self):
+        super(DigitDeconv, self).__init__()
+        self.conv1 = nn.ConvTranspose2d(1, 20, 5, 1)
+        self.conv2 = nn.ConvTranspose2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(500, 4*4*50)
+        self.fc2 = nn.Linear(10, 500)
+
+    def forward(self, x):
+        # x = F.relu(self.conv1(x))
+        # x = F.max_pool2d(x, 2, 2)
+        # x = F.relu(self.conv2(x))
+        # x = F.max_pool2d(x, 2, 2)
+        # x = x.view(-1, 4*4*50)
+        # x = F.relu(self.fc1(x))
+
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc1(x))
+        x = x.view(-1, 4, 4, 50)
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv1(x))
+
+        return F.softmax(x)
+
+
 class MNISTSudokuSolver(nn.Module):
     def __init__(self, boardSz, aux, m):
         super(MNISTSudokuSolver, self).__init__()
         self.digit_convnet = DigitConv()
+        self.digit_deconv = DigitDeconv()
         self.sudoku_solver = SudokuSolver(boardSz, aux, m)
         self.boardSz = boardSz
         self.nSq = boardSz**2
     
     def forward(self, x, is_inputs):
         nBatch = x.shape[0]
+        print(x.shape)
         x = x.flatten(start_dim = 0, end_dim = 1)
+        print(x.shape)
         digit_guess = self.digit_convnet(x)
+        print(digit_guess.shape)
         puzzles = digit_guess.view(nBatch, self.nSq * self.nSq * self.nSq)
+        print(puzzles.shape)
+
+        reconstructed = self.digit_deconv(puzzles)
 
         solution = self.sudoku_solver(puzzles, is_inputs)
-        return solution
+        return solution, reconstructed
 
 class CSVLogger(object):
     def __init__(self, fname):
@@ -243,7 +278,9 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train=Fal
 
     for i,(data,is_input,label) in tloader:
         if to_train: optimizer.zero_grad()
-        preds = model(data.contiguous(), is_input.contiguous())
+        preds, reconstructed = model(data.contiguous(), is_input.contiguous())
+        print(reconstructed)
+        quit()
         loss = nn.functional.binary_cross_entropy(preds, label)
 
         if to_train:

@@ -150,4 +150,7 @@ class SATNet(nn.Module):
 
         z = MixingFunc.apply(self.S, z, is_input, self.max_iter, self.eps, self.prox_lam)
 
-        return z[:,1:self.S.size(0)-self.aux]
+        z = z*(1 - is_input).float()
+        z = z[:,1:self.S.size(0)-self.aux]
+
+        return z
