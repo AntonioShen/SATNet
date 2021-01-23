@@ -20,7 +20,7 @@ batch_size = 100
 
 x_dim  = 784
 hidden_dim = 400
-latent_dim = 20
+latent_dim = 9
 
 lr = 1e-3
 
@@ -175,7 +175,7 @@ def show_image(x, idx, name):
     x = x.view(batch_size, 28, 28)
 
     fig = plt.figure()
-    plt.imshow(x[idx].cpu().numpy())
+    # plt.imshow(x[idx].cpu().numpy())
     plt.imsave(name, x[idx].cpu().numpy())
 
 show_image(x, 0, 'target.png')

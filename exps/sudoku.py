@@ -20,6 +20,10 @@ import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader
 from tqdm.auto import tqdm
 
+from matplotlib import pyplot as plt
+
+torch.set_printoptions(linewidth=200, precision=2)
+
 import satnet
 
 # -------------------------------------------------------------------
@@ -35,6 +39,8 @@ class Encoder(nn.Module):
         self.training = True
         
     def forward(self, x):
+        x = x.flatten(start_dim = 1, end_dim = 3)
+
         h_       = torch.relu(self.FC_input(x))
         mean     = self.FC_mean(h_)
         log_var  = self.FC_var(h_)                     # encoder produces mean and log of variance 
@@ -46,7 +52,7 @@ class Encoder(nn.Module):
     
     
     def reparameterization(self, mean, var,):
-        epsilon = torch.rand_like(var).to(DEVICE)        # sampling epsilon
+        epsilon = torch.rand_like(var)        # sampling epsilon
         
         z = mean + var*epsilon                          # reparameterization trick
         
@@ -58,7 +64,7 @@ class Decoder(nn.Module):
         self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
         self.FC_output = nn.Linear(hidden_dim, output_dim)
 
-        self.FC_reconstruct = nn.Linear(latent_dim, 10)
+        self.FC_reconstruct = nn.Linear(latent_dim, 9)
         
     def forward(self, x):
         h     = torch.relu(self.FC_hidden(x))
@@ -69,7 +75,7 @@ class Decoder(nn.Module):
 
 class Vae(nn.Module):
     def __init__(self, Encoder, Decoder):
-        super(VAE, self).__init__()
+        super(Vae, self).__init__()
         self.Encoder = Encoder
         self.Decoder = Decoder
                 
@@ -82,20 +88,28 @@ class Vae(nn.Module):
 
 class VaeSudokuSolver(nn.Module):
     def __init__(self, boardSz, aux, m):
-        super(MNISTSudokuSolver, self).__init__()
-        self.vae = Vae()
-        self.sudoku_solver = SudokuSolver(boardSz, aux, m)
+        super(VaeSudokuSolver, self).__init__()
         self.boardSz = boardSz
         self.nSq = boardSz**2
+
+        x_dim  = 784
+        hidden_dim = 400
+        latent_dim = 20
+
+        encoder = Encoder(input_dim=x_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
+        decoder = Decoder(latent_dim=latent_dim, hidden_dim = hidden_dim, output_dim = x_dim)
+        self.digit_convnet = Vae(encoder, decoder)
+        self.sudoku_solver = SudokuSolver(boardSz, aux, m)
+        
     
     def forward(self, x, is_inputs):
         nBatch = x.shape[0]
         x = x.flatten(start_dim = 0, end_dim = 1)
-        x_hat, z, mean, log_var, y_hat = self.vae(x)
-        puzzles = z.view(nBatch, self.nSq * self.nSq * self.nSq)
+        x_hat, z, mean, log_var, y_hat = self.digit_convnet(x)
+        puzzles = y_hat.view(nBatch, self.nSq * self.nSq * self.nSq)
 
-        solution = self.sudoku_solver(puzzles, is_inputs)
-        return solution, None
+        solution, _ = self.sudoku_solver(puzzles, is_inputs)
+        return solution, (x_hat, z, mean, log_var, y_hat)
 
 # -------------------------------------------------------------------
 
@@ -243,6 +257,7 @@ def main():
     parser.add_argument('--model', type=str)
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--mnist', action='store_true')
+    parser.add_argument('--vae', action='store_true')
     parser.add_argument('--perm', action='store_true')
 
     args = parser.parse_args()
@@ -258,8 +273,9 @@ def main():
         torch.backends.cudnn.benchmark = False
         torch.cuda.init()
 
-    save = 'sudoku{}{}.boardSz{}-aux{}-m{}-lr{}-bsz{}'.format(
+    save = 'sudoku{}{}{}.boardSz{}-aux{}-m{}-lr{}-bsz{}'.format(
             '.perm' if args.perm else '', '.mnist' if args.mnist else '',
+            '.vae' if args.vae else '',
             args.boardSz, args.aux, args.m, args.lr, args.batchSz)
     if args.save: save = '{}-{}'.format(args.save, save)
     save = os.path.join('logs', save)
@@ -287,7 +303,7 @@ def main():
 
     print_header('Forming inputs')
     X, Ximg, Y, is_input = process_inputs(X_in, Ximg_in, Y_in, args.boardSz)
-    data = Ximg if args.mnist else X
+    data = Ximg if args.mnist or args.vae else X
     if args.cuda: data, is_input, Y = data.cuda(), is_input.cuda(), Y.cuda()
 
     unperm = None
@@ -300,14 +316,17 @@ def main():
     test_set =  TensorDataset(data[nTrain:], is_input[nTrain:], Y[nTrain:])
 
     print_header('Building model')
+    assert sum([args.mnist, args.vae]) <= 1 # Only one configuration flag may be active at a time.
     if args.mnist:
         model = MNISTSudokuSolver(args.boardSz, args.aux, args.m)
+    elif args.vae:
+        model = VaeSudokuSolver(args.boardSz, args.aux, args.m)
     else:
         model = SudokuSolver(args.boardSz, args.aux, args.m)
 
     if args.cuda: model = model.cuda()
 
-    if args.mnist:
+    if args.mnist or args.vae:
         optimizer = optim.Adam([
             {'params': model.sudoku_solver.parameters(), 'lr': args.lr},
             {'params': model.digit_convnet.parameters(), 'lr': 1e-5},
@@ -336,11 +355,24 @@ def process_inputs(X, Ximg, Y, boardSz):
     Ximg = Ximg.flatten(start_dim=1, end_dim=2)
     Ximg = Ximg.unsqueeze(2).float()
 
+    mean = torch.mean(Ximg)
+    std = torch.std(Ximg)
+
+    Ximg = (Ximg - mean) / std
+    Ximg = torch.clamp(Ximg, 0, 1)
+
     X      = X.view(X.size(0), -1)
     Y      = Y.view(Y.size(0), -1)
     is_input = is_input.view(is_input.size(0), -1)
 
     return X, Ximg, Y, is_input
+
+def show_image(x, name):
+    x = x.view(28, 28)
+
+    fig = plt.figure()
+    # plt.imshow(x[idx].cpu().numpy())
+    plt.imsave(name, x.cpu().numpy())
 
 def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train=False, unperm=None):
 
@@ -353,20 +385,33 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train=Fal
         if to_train: optimizer.zero_grad()
         preds, reconstructed = model(data.contiguous(), is_input.contiguous())
 
-
         preds = preds + label*is_input.float()
 
         if not to_train and i == 1:
             print(preds[0], label[0]) 
 
-        loss = nn.functional.binary_cross_entropy(preds, label)
+        if reconstructed is not None:
+            x_hat, z, mean, log_var, y_hat = reconstructed
+            data = data.flatten(start_dim = 0, end_dim = 1)
+            data = data.flatten(start_dim = 1, end_dim = 3)
+
+            if not to_train and i == 1:
+                show_image(data[0], f'gt{i}.png')
+                show_image(x_hat[0], f'pred{i}.png')
+
+            KLD = - 0.5 * torch.mean(1+ log_var - mean.pow(2) - log_var.exp())
+            reconstruction_loss = 0.2*(nn.functional.binary_cross_entropy(x_hat, data) + KLD)
+        else:
+            reconstruction_loss = 0
+
+        loss = nn.functional.binary_cross_entropy(preds, label) + reconstruction_loss
 
         if to_train:
             loss.backward()
             optimizer.step()
 
         err = computeErr(preds.data, boardSz, unperm)/batchSz
-        tloader.set_description('Epoch {} {} Loss {:.4f} Err: {:.4f}'.format(epoch, ('Train' if to_train else 'Test '), loss.item(), err))
+        tloader.set_description('Epoch {} {} Loss {:.4f} (reconstruction {:.4f}) Err: {:.4f}'.format(epoch, ('Train' if to_train else 'Test '), loss.item(), reconstruction_loss.item(), err))
         loss_final += loss.item()
         err_final += err
 
