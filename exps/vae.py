@@ -76,12 +76,15 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
         self.FC_output = nn.Linear(hidden_dim, output_dim)
-        
+
+        self.FC_reconstruct = nn.Linear(latent_dim, 10)
         
     def forward(self, x):
         h     = torch.relu(self.FC_hidden(x))
         x_hat = torch.sigmoid(self.FC_output(h))
-        return x_hat
+
+        y_hat = torch.log_softmax(self.FC_reconstruct(x), dim=1)
+        return x_hat, y_hat
 
 class Model(nn.Module):
     def __init__(self, Encoder, Decoder):
@@ -91,9 +94,9 @@ class Model(nn.Module):
                 
     def forward(self, x):
         z, mean, log_var = self.Encoder(x)
-        x_hat            = self.Decoder(z)
+        x_hat, y_hat           = self.Decoder(z)
         
-        return x_hat, mean, log_var
+        return x_hat, mean, log_var, y_hat
 
 
 encoder = Encoder(input_dim=x_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
@@ -106,11 +109,12 @@ from torch.optim import Adam
 
 BCE_loss = nn.BCELoss()
 
-def loss_function(x, x_hat, mean, log_var):
+def loss_function(x, x_hat, mean, log_var, y, y_hat):
     reproduction_loss = nn.functional.binary_cross_entropy(x_hat, x, reduction='sum')
+    classification_loss = nn.functional.nll_loss(y_hat, y, reduction='sum')
     KLD      = - 0.5 * torch.sum(1+ log_var - mean.pow(2) - log_var.exp())
 
-    return reproduction_loss + KLD
+    return reproduction_loss + KLD + classification_loss, reproduction_loss.item(), KLD.item(), classification_loss.item()
 
 
 optimizer = Adam(model.parameters(), lr=lr)
@@ -123,21 +127,28 @@ else:
 
     for epoch in range(epochs):
         overall_loss = 0
-        for batch_idx, (x, _) in enumerate(tqdm(train_loader)):
+        overall_component_losses = 0, 0, 0
+        correct = 0
+        for batch_idx, (x, y) in enumerate(tqdm(train_loader)):
             x = x.view(batch_size, x_dim)
             x = x.to(DEVICE)
+            y = y.to(DEVICE)
 
             optimizer.zero_grad()
 
-            x_hat, mean, log_var = model(x)
-            loss = loss_function(x, x_hat, mean, log_var)
+            x_hat, mean, log_var, y_hat = model(x)
+            loss, rloss, kloss, closs = loss_function(x, x_hat, mean, log_var, y, y_hat)
             
             overall_loss += loss.item()
+            overall_component_losses = overall_component_losses[0] + rloss, overall_component_losses[1] + kloss, overall_component_losses[2] + closs
+
+            pred = y_hat.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+            correct += pred.eq(y.view_as(pred)).sum().item()
             
             loss.backward()
             optimizer.step()
             
-        print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))
+        print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size),"accuracy: ", correct / (batch_idx*batch_size), "Component Losses", [i / (batch_idx*batch_size) for i in overall_component_losses])
         
     print("Finish!!")
 
@@ -148,11 +159,15 @@ import matplotlib.pyplot as plt
 model.eval()
 
 with torch.no_grad():
-    for batch_idx, (x, _) in enumerate(tqdm(test_loader)):
+    for batch_idx, (x, y) in enumerate(tqdm(test_loader)):
         x = x.view(batch_size, x_dim)
         x = x.to(DEVICE)
         
-        x_hat, _, _ = model(x)
+        x_hat, _, _, y_hat = model(x)
+
+        pred = y_hat.argmax(dim=1, keepdim=True).cpu()  # get the index of the max log-probability
+        correct = pred.eq(y.view_as(pred)).sum().item()
+        print(f'prediceted: {pred[0]} for correct value of {y[0]} ({correct / batch_size} total)')
         
         break
 

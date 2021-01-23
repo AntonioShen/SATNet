@@ -22,6 +22,83 @@ from tqdm.auto import tqdm
 
 import satnet
 
+# -------------------------------------------------------------------
+
+class Encoder(nn.Module):
+    
+    def __init__(self, input_dim, hidden_dim, latent_dim):
+        super(Encoder, self).__init__()
+        
+        self.FC_input = nn.Linear(input_dim, hidden_dim)
+        self.FC_mean  = nn.Linear(hidden_dim, latent_dim)
+        self.FC_var   = nn.Linear (hidden_dim, latent_dim)
+        self.training = True
+        
+    def forward(self, x):
+        h_       = torch.relu(self.FC_input(x))
+        mean     = self.FC_mean(h_)
+        log_var  = self.FC_var(h_)                     # encoder produces mean and log of variance 
+                                                       #             (i.e., parateters of simple tractable normal distribution "q")
+        var      = torch.exp(0.5*log_var)              # takes exponential function
+        z        = self.reparameterization(mean, var)
+        
+        return z, mean, log_var
+    
+    
+    def reparameterization(self, mean, var,):
+        epsilon = torch.rand_like(var).to(DEVICE)        # sampling epsilon
+        
+        z = mean + var*epsilon                          # reparameterization trick
+        
+        return z
+
+class Decoder(nn.Module):
+    def __init__(self, latent_dim, hidden_dim, output_dim):
+        super(Decoder, self).__init__()
+        self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
+        self.FC_output = nn.Linear(hidden_dim, output_dim)
+
+        self.FC_reconstruct = nn.Linear(latent_dim, 10)
+        
+    def forward(self, x):
+        h     = torch.relu(self.FC_hidden(x))
+        x_hat = torch.sigmoid(self.FC_output(h))
+
+        y_hat = torch.log_softmax(self.FC_reconstruct(x), dim=1)
+        return x_hat, y_hat
+
+class Vae(nn.Module):
+    def __init__(self, Encoder, Decoder):
+        super(VAE, self).__init__()
+        self.Encoder = Encoder
+        self.Decoder = Decoder
+                
+    def forward(self, x):
+        z, mean, log_var = self.Encoder(x)
+        x_hat, y_hat           = self.Decoder(z)
+        
+        return x_hat, z, mean, log_var, y_hat
+
+
+class VaeSudokuSolver(nn.Module):
+    def __init__(self, boardSz, aux, m):
+        super(MNISTSudokuSolver, self).__init__()
+        self.vae = Vae()
+        self.sudoku_solver = SudokuSolver(boardSz, aux, m)
+        self.boardSz = boardSz
+        self.nSq = boardSz**2
+    
+    def forward(self, x, is_inputs):
+        nBatch = x.shape[0]
+        x = x.flatten(start_dim = 0, end_dim = 1)
+        x_hat, z, mean, log_var, y_hat = self.vae(x)
+        puzzles = z.view(nBatch, self.nSq * self.nSq * self.nSq)
+
+        solution = self.sudoku_solver(puzzles, is_inputs)
+        return solution, None
+
+# -------------------------------------------------------------------
+
 class SudokuSolver(nn.Module):
     def __init__(self, boardSz, aux, m):
         super(SudokuSolver, self).__init__()
@@ -30,7 +107,9 @@ class SudokuSolver(nn.Module):
 
     def forward(self, y_in, mask):
         out = self.sat(y_in, mask)
-        return out
+        return out, None
+
+
 
 class DigitConv(nn.Module):
     '''
@@ -93,18 +172,12 @@ class MNISTSudokuSolver(nn.Module):
     
     def forward(self, x, is_inputs):
         nBatch = x.shape[0]
-        print(x.shape)
         x = x.flatten(start_dim = 0, end_dim = 1)
-        print(x.shape)
         digit_guess = self.digit_convnet(x)
-        print(digit_guess.shape)
         puzzles = digit_guess.view(nBatch, self.nSq * self.nSq * self.nSq)
-        print(puzzles.shape)
-
-        reconstructed = self.digit_deconv(puzzles)
 
         solution = self.sudoku_solver(puzzles, is_inputs)
-        return solution, reconstructed
+        return solution
 
 class CSVLogger(object):
     def __init__(self, fname):
@@ -279,8 +352,13 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train=Fal
     for i,(data,is_input,label) in tloader:
         if to_train: optimizer.zero_grad()
         preds, reconstructed = model(data.contiguous(), is_input.contiguous())
-        print(reconstructed)
-        quit()
+
+
+        preds = preds + label*is_input.float()
+
+        if not to_train and i == 1:
+            print(preds[0], label[0]) 
+
         loss = nn.functional.binary_cross_entropy(preds, label)
 
         if to_train:
@@ -297,6 +375,7 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train=Fal
 
     if not to_train:
         print('TESTING SET RESULTS: Average loss: {:.4f} Err: {:.4f}'.format(loss_final, err_final))
+        torch.save(model.state_dict(), "sudoku.pt")
 
     #print('memory: {:.2f} MB, cached: {:.2f} MB'.format(torch.cuda.memory_allocated()/2.**20, torch.cuda.memory_cached()/2.**20))
     torch.cuda.empty_cache()
