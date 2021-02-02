@@ -27,36 +27,24 @@ torch.set_printoptions(linewidth=200, precision=2)
 import satnet
 
 # -------------------------------------------------------------------
-
 class Encoder(nn.Module):
     
     def __init__(self, input_dim, hidden_dim, latent_dim):
         super(Encoder, self).__init__()
         
-        self.FC_input = nn.Linear(input_dim, hidden_dim)
-        self.FC_mean  = nn.Linear(hidden_dim, latent_dim)
-        self.FC_var   = nn.Linear (hidden_dim, latent_dim)
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2  = nn.Linear(hidden_dim, latent_dim)
         self.training = True
         
     def forward(self, x):
         x = x.flatten(start_dim = 1, end_dim = 3)
 
-        h_       = torch.relu(self.FC_input(x))
-        mean     = self.FC_mean(h_)
-        log_var  = self.FC_var(h_)                     # encoder produces mean and log of variance 
-                                                       #             (i.e., parateters of simple tractable normal distribution "q")
-        var      = torch.exp(0.5*log_var)              # takes exponential function
-        z        = self.reparameterization(mean, var)
+        x = torch.relu(self.fc1(x))
+        x = torch.softmax(self.fc2(x), dim=1)
+
         
-        return z, mean, log_var
+        return x
     
-    
-    def reparameterization(self, mean, var,):
-        epsilon = torch.rand_like(var)        # sampling epsilon
-        
-        z = mean + var*epsilon                          # reparameterization trick
-        
-        return z
 
 class Decoder(nn.Module):
     def __init__(self, latent_dim, hidden_dim, output_dim):
@@ -64,14 +52,12 @@ class Decoder(nn.Module):
         self.FC_hidden = nn.Linear(latent_dim, hidden_dim)
         self.FC_output = nn.Linear(hidden_dim, output_dim)
 
-        self.FC_reconstruct = nn.Linear(latent_dim, 9)
         
     def forward(self, x):
         h     = torch.relu(self.FC_hidden(x))
         x_hat = torch.sigmoid(self.FC_output(h))
 
-        y_hat = torch.log_softmax(self.FC_reconstruct(x), dim=1)
-        return x_hat, y_hat
+        return x_hat
 
 class Vae(nn.Module):
     def __init__(self, Encoder, Decoder):
@@ -80,11 +66,10 @@ class Vae(nn.Module):
         self.Decoder = Decoder
                 
     def forward(self, x):
-        z, mean, log_var = self.Encoder(x)
-        x_hat, y_hat           = self.Decoder(z)
+        z = self.Encoder(x)
+        x_hat           = self.Decoder(z)
         
-        return x_hat, z, mean, log_var, y_hat
-
+        return x_hat, z
 
 class VaeSudokuSolver(nn.Module):
     def __init__(self, boardSz, aux, m):
@@ -94,7 +79,7 @@ class VaeSudokuSolver(nn.Module):
 
         x_dim  = 784
         hidden_dim = 400
-        latent_dim = 20
+        latent_dim = 9
 
         encoder = Encoder(input_dim=x_dim, hidden_dim=hidden_dim, latent_dim=latent_dim)
         decoder = Decoder(latent_dim=latent_dim, hidden_dim = hidden_dim, output_dim = x_dim)
@@ -105,11 +90,11 @@ class VaeSudokuSolver(nn.Module):
     def forward(self, x, is_inputs):
         nBatch = x.shape[0]
         x = x.flatten(start_dim = 0, end_dim = 1)
-        x_hat, z, mean, log_var, y_hat = self.digit_convnet(x)
-        puzzles = y_hat.view(nBatch, self.nSq * self.nSq * self.nSq)
+        x_hat, z = self.digit_convnet(x)
+        puzzles = z.view(nBatch, self.nSq * self.nSq * self.nSq)
 
         solution, _ = self.sudoku_solver(puzzles, is_inputs)
-        return solution, (x_hat, z, mean, log_var, y_hat)
+        return solution, (x_hat, z)
 
 # -------------------------------------------------------------------
 
@@ -326,13 +311,16 @@ def main():
 
     if args.cuda: model = model.cuda()
 
-    if args.mnist or args.vae:
+    if args.mnist:
         optimizer = optim.Adam([
             {'params': model.sudoku_solver.parameters(), 'lr': args.lr},
             {'params': model.digit_convnet.parameters(), 'lr': 1e-5},
             ])
+    elif args.vae:
+        optimizer = optim.SGD(model.parameters(), lr=1e2)
     else:
         optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
 
     if args.model:
         model.load_state_dict(torch.load(args.model))
@@ -391,18 +379,18 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train=Fal
             print(preds[0], label[0]) 
 
         if reconstructed is not None:
-            x_hat, z, mean, log_var, y_hat = reconstructed
+            x_hat, z = reconstructed
             data = data.flatten(start_dim = 0, end_dim = 1)
             data = data.flatten(start_dim = 1, end_dim = 3)
 
             if not to_train and i == 1:
+                print(z[0])
                 show_image(data[0], f'gt{i}.png')
                 show_image(x_hat[0], f'pred{i}.png')
 
-            KLD = - 0.5 * torch.mean(1+ log_var - mean.pow(2) - log_var.exp())
-            reconstruction_loss = 0.2*(nn.functional.binary_cross_entropy(x_hat, data) + KLD)
+            reconstruction_loss = nn.functional.binary_cross_entropy(x_hat, data)
         else:
-            reconstruction_loss = 0
+            reconstruction_loss = torch.zeros(1)
 
         loss = nn.functional.binary_cross_entropy(preds, label) + reconstruction_loss
 
