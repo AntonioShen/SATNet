@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 import numpy as np
 
@@ -50,7 +51,7 @@ batch_size = 100
 
 x_dim  = 784
 hidden_dim = 400
-latent_dim = 10
+latent_dim = 20
 
 lr = 1e-3
 
@@ -165,6 +166,27 @@ else:
 
 model.eval()
 
+dimensions = math.ceil(math.sqrt(latent_dim))
+fig, axs = plt.subplots(dimensions, dimensions)
+fig.suptitle('Latent Dimension Symbol mapping.')
+
+for ax_row in axs:
+    for ax in ax_row:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+for i in range(latent_dim):
+    z = torch.zeros(latent_dim)
+    z[i] = 1
+    z = z.to(DEVICE)
+
+    axis_index = (i // dimensions, i % dimensions)
+
+    prediction = decoder(z).detach().cpu().view(28, 28).numpy()
+
+    axs[axis_index].imshow(prediction)
+
+plt.savefig('projection.png')
 
 
 
