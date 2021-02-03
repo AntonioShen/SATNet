@@ -166,27 +166,58 @@ else:
 
 model.eval()
 
-dimensions = math.ceil(math.sqrt(latent_dim))
-fig, axs = plt.subplots(dimensions, dimensions)
-fig.suptitle('Latent Dimension Symbol mapping.')
+def generate_projections(model, latent_dim):
+    dimensions = math.ceil(math.sqrt(latent_dim))
+    fig, axs = plt.subplots(dimensions, dimensions)
+    fig.suptitle('Latent Dimension Symbol mapping.')
 
-for ax_row in axs:
-    for ax in ax_row:
-        ax.set_xticks([])
-        ax.set_yticks([])
+    for ax_row in axs:
+        for ax in ax_row:
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-for i in range(latent_dim):
-    z = torch.zeros(latent_dim)
-    z[i] = 1
-    z = z.to(DEVICE)
+    for i in range(latent_dim):
+        z = torch.zeros(latent_dim)
+        z[i] = 1
+        z = z.to(DEVICE)
 
-    axis_index = (i // dimensions, i % dimensions)
+        axis_index = (i // dimensions, i % dimensions)
 
-    prediction = decoder(z).detach().cpu().view(28, 28).numpy()
+        prediction = decoder(z).detach().cpu().view(28, 28).numpy()
 
-    axs[axis_index].imshow(prediction)
+        axs[axis_index].imshow(prediction)
 
-plt.savefig('projection.png')
+    plt.savefig('projection.png')
 
+
+def get_mapping(model, latent_dim, loader):
+    confusion = torch.zeros([latent_dim, 10])
+    tloader = tqdm(loader)
+    for batch_idx, (x, y) in enumerate(tloader):
+        x = x.view(batch_size, x_dim)
+        x = x.to(DEVICE)
+        y = y.to(DEVICE)
+
+        x_hat, z = model(x)
+
+        values, indices = torch.topk(z, 1)
+        indices = indices.squeeze()
+
+        for i, index in enumerate(indices):
+            confusion[index, y[i]] += 1
+
+        tloader.set_description(f'batch {batch_idx}')
+
+    values, indices = torch.topk(confusion, 1)
+
+    return values, indices.squeeze(), len(tloader)
+
+generate_projections(model, latent_dim)
+
+values, indices, num_datapoints = get_mapping(model, latent_dim, test_loader)
+print(f'Test correctness: {values.sum() / num_datapoints} -- mapping: {indices}')
+
+values, indices, num_datapoints = get_mapping(model, latent_dim, train_loader)
+print(f'Train correctness: {values.sum() / num_datapoints} -- mapping: {indices}')
 
 
