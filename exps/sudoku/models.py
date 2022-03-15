@@ -20,11 +20,13 @@ class SudokuSolver(nn.Module):
     def forward(self, y_in, mask):
 
         in_ = torch.cat((y_in, mask.float()), dim=1) if self.pass_mask else y_in
-        if self.pass_mask: mask = torch.cat((mask, torch.ones_like(mask)), dim=1)
+        if self.pass_mask:
+            mask = torch.cat((mask, torch.ones_like(mask)), dim=1)
 
         out = self.sat(in_, mask)
 
-        if self.pass_mask: out = out[:, :self.n]
+        if self.pass_mask:
+            out = out[:, :self.n]
 
         if self.softmax:
             out = torch.softmax(out.contiguous().view(-1, 9), dim=1).view(-1, in_.shape[1])

@@ -23,7 +23,7 @@ class MixingFunc(Function):
     def forward(ctx, S, z, is_input, max_iter, eps, prox_lam):
         B, n, m, k = z.size(0), S.size(0), S.size(1), 32 #get_k(S.size(0))
         ctx.prox_lam = prox_lam
-        
+
         device = 'cuda' if S.is_cuda else 'cpu'
         ctx.g, ctx.gnrm = torch.zeros(B,k, device=device), torch.zeros(B,n, device=device)
         ctx.index = torch.zeros(B,n, dtype=torch.int, device=device)
@@ -154,4 +154,5 @@ class SATNet(nn.Module):
         if not self.leak_labels:
             z = z*(1 - is_input).float()
 
+        # return z[:,1:730]
         return z[:,1:self.S.size(0)-self.aux]

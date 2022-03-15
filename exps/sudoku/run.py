@@ -26,6 +26,7 @@ def run(args, num_experiment_repetitions=1, num_epochs=100):
             num_injected_input_cell_errors=args.num_errors,
             infogan_labels_dir=args.infogan_labels_dir,
             experiment_num=i,
+            num_cats=args.num_cats
         )
         results.append(result)
 
@@ -46,6 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--infogan-labels-dir', type=str)
     parser.add_argument('--num-experiments', type=int, default=1)
     parser.add_argument('--num-epochs', type=int, default=100)
+    parser.add_argument('--num-cats', type=int, default=9)
 
     args = parser.parse_args()
 

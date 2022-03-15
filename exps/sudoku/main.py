@@ -23,14 +23,15 @@ from torch.utils.data import TensorDataset, DataLoader
 from tqdm.auto import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from visualize import visualize
 
 # torch.autograd.set_detect_anomaly(True)
 torch.set_printoptions(threshold=1000)
 
 
 import prep_dataset
-import models
-from loss import permutation_invariant_loss, to_oh
+import models_unkcats
+from loss import permutation_invariant_loss, to_oh, zyy_loss
 
 
 MODES = [
@@ -98,6 +99,7 @@ def main(
     solvability='any',
     infogan_labels_dir=None,
     experiment_num=0,
+    num_cats=9,
 ):
     assert mode in MODES
     cuda = not no_cuda and torch.cuda.is_available()
@@ -105,7 +107,7 @@ def main(
     
     save = 'sudoku.{}.boardSz{}-aux{}-m{}-lr{}-bsz{}-exp{}'.format(mode,
             boardSz, aux, m, lr, batchSz, experiment_num)
-    save = os.path.join('logs', save)
+    save = os.path.join('num_cats_{}/logs'.format(str(num_cats)), save)
     if os.path.isdir(save): shutil.rmtree(save)
     os.makedirs(save)
 
@@ -114,6 +116,14 @@ def main(
     print_header('Loading data')
 
     perm = None
+    # zyy
+    # perm = np.zeros((boardSz ** 4, boardSz ** 2))
+    # for i in range(0, perm.shape[0]):
+    #     perm[i, :] = i * 9
+    #     perm[i, :] += np.array([1, 2, 3, 4, 5, 6, 7, 8, 0])
+    #     perm[i, :] += np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    #
+    # perm = torch.tensor(perm.reshape(-1), dtype=int)
 
     if mode in (
             'visual',
@@ -126,8 +136,8 @@ def main(
         unperm = None
 
     elif mode in (
-            'nonvisual', 
-            'train-proofreader-nonvisual', 
+            'nonvisual',
+            'train-proofreader-nonvisual',
         ):
         train_set, test_set, unperm = prep_dataset.get_sudoku_nonvisual(
             data_dir, cuda, perm, num_injected_input_cell_errors, solvability
@@ -138,27 +148,27 @@ def main(
 
     print_header('Building model')
     if mode in ('visual', ):
-        model = models.MNISTSudokuSolver(boardSz**6, aux, m, leak_labels, softmax=False)
+        model = models_unkcats.MNISTSudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, softmax=True, num_cats=num_cats)
 
         if load_model:
             model.load_from_pieces_if_present(torch.load(load_model))
 
-    elif mode in ('nonvisual',):
-        model = models.SudokuSolver(boardSz**6, aux, m, leak_labels, softmax=False)
+    # elif mode in ('nonvisual',):
+    #     model = models_unkcats.SudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, softmax=False)
+    #
+    #     if load_model:
+    #         model.load_from_pieces_if_present(torch.load(load_model))
 
-        if load_model:
-            model.load_from_pieces_if_present(torch.load(load_model))
-
-    elif mode == 'train-proofreader-nonvisual':
-        model = models.ProofreadSudokuSolver(boardSz**6, aux, m, leak_labels, softmax=True)
-
-        if load_model:
-            model.load_from_pieces_if_present(torch.load(load_model))
-
-        freeze_model(model.sudoku_solver)
+    # elif mode == 'train-proofreader-nonvisual':
+    #     model = models_unkcats.ProofreadSudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, softmax=True, num_cats=num_cats)
+    #
+    #     if load_model:
+    #         model.load_from_pieces_if_present(torch.load(load_model))
+    #
+    #     freeze_model(model.sudoku_solver)
 
     elif mode in ('train-satnet-visual-infogan',):
-        model = models.InfoGanSudokuSolver(boardSz**6, aux, m, leak_labels)
+        model = models_unkcats.InfoGanSudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, num_cats=num_cats)
 
         if load_model:
             model.load_from_pieces_if_present(torch.load(load_model))
@@ -168,13 +178,13 @@ def main(
 
 
     elif mode in ('satnet-visual-infogan-generate-dataset',):
-        model = models.InfoGanSudokuSolver(boardSz**6, aux, m, leak_labels)
+        model = models_unkcats.InfoGanSudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, num_cats=num_cats)
         
         if load_model:
             model.load_from_pieces_if_present(torch.load(load_model))
 
     elif mode in ('train-backbone-lenet-supervised',):
-        model = models.MNISTSudokuSolver(boardSz**6, aux, m, leak_labels, softmax=True)
+        model = models_unkcats.MNISTSudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, softmax=True, num_cats=num_cats)
 
         if load_model:
             model.load_from_pieces_if_present(torch.load(load_model))
@@ -182,14 +192,14 @@ def main(
         freeze_model(model.sudoku_solver)
 
 
-    elif mode == 'train-proofreader-lenet':
-        model = models.MNISTSudokuSolver(boardSz**6, aux, m, leak_labels, softmax=False, proofread=True)
-
-        if load_model:
-            model.load_from_pieces_if_present(torch.load(load_model))
-
-        freeze_model(model.digit_convnet)
-        freeze_model(model.sudoku_solver.sudoku_solver)
+    # elif mode == 'train-proofreader-lenet':
+    #     model = models_unkcats.MNISTSudokuSolver(boardSz**4 * num_cats, aux, m, leak_labels, softmax=False, proofread=True, num_cats=num_cats)
+    #
+    #     if load_model:
+    #         model.load_from_pieces_if_present(torch.load(load_model))
+    #
+    #     freeze_model(model.digit_convnet)
+    #     freeze_model(model.sudoku_solver.sudoku_solver)
 
 
     else:
@@ -236,25 +246,25 @@ def main(
         signal.signal(signal.SIGINT, signal_handler)
 
 
-    # run_extract(boardSz, 0, model, optimizer, test_logger, train_set, testBatchSz, unperm, mode)
-    label_set = test(boardSz, 0, model, optimizer, test_logger, test_set, testBatchSz, unperm, mode, img_list_test, leak_labels)
+    # run_extract(boardSz**4 * num_cats, 0, model, optimizer, test_logger, train_set, testBatchSz, unperm, mode)
+    label_set = test(boardSz, 0, model, optimizer, test_logger, test_set, testBatchSz, unperm, mode, img_list_test, leak_labels, num_cats)
 
     if mode in ('satnet-visual-infogan-generate-dataset', ):
-        file_name = 'test_labels.pt'
+        file_name = 'num_cats_{}/test_labels.pt'.format(str(num_cats))
         print(f'Saving labels with dim {label_set.shape} to {file_name}.')
         torch.save(label_set, file_name)
 
-        label_set = test(boardSz, 0, model, optimizer, test_logger, train_set, testBatchSz, unperm, mode, img_list_test, leak_labels)
+        label_set = test(boardSz, 0, model, optimizer, test_logger, train_set, testBatchSz, unperm, mode, img_list_test, leak_labels, num_cats)
 
-        file_name = 'train_labels.pt'
+        file_name = 'num_cats_{}/train_labels.pt'.format(str(num_cats))
         print(f'Saving labels with dim {label_set.shape} to {file_name}.')
         torch.save(label_set, file_name)
         return save
 
     if to_train:
         for epoch in range(1, nEpoch+1):
-            train(boardSz, epoch, model, optimizer, train_logger, train_set, batchSz, unperm, mode, img_list_train, leak_labels)
-            test(boardSz, epoch, model, optimizer, test_logger, test_set, testBatchSz, unperm, mode, img_list_test, leak_labels)
+            train(boardSz, epoch, model, optimizer, train_logger, train_set, batchSz, unperm, mode, img_list_train, leak_labels, num_cats)
+            test(boardSz, epoch, model, optimizer, test_logger, test_set, testBatchSz, unperm, mode, img_list_test, leak_labels, num_cats)
             torch.save(model.get_pieces(), os.path.join(save, 'it'+str(epoch)+'.pth'))
 
     if mode in (
@@ -268,7 +278,7 @@ def main(
     return save
     
 
-def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, unperm, mode, img_list, leak_labels):
+def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, unperm, mode, img_list, leak_labels, num_cats):
 
     loss_final, board_err_final, err_solvable_final, err_unsolvable_final, solvable_total, unsolvable_total, cell_err_final, visual_err_final, num_inputs_final = 0., 0., 0., 0., 0., 0., 0., 0., 0.
 
@@ -279,18 +289,39 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
         label_set = []
 
 
-    avg_perm = torch.zeros(len(tloader), 9, 9)
+    avg_perm = torch.zeros(len(tloader), num_cats, 9)
     for i, content in tloader:
         data, is_input, label = content[:3]
+        # zyy
+        # visualize(data[0].cpu().detach().numpy(), is_input[0].cpu().detach().numpy(), label[0][unperm].cpu().detach().numpy())
+        # exit(0)
+        # zyy
+        # is_input_original = torch.clone(is_input)
+
+        # zyy
+        if num_cats > 9:
+            is_input = torch.reshape(is_input, (batchSz, boardSz ** 2, boardSz ** 2, boardSz ** 2))
+            is_input_add, _ = torch.topk(is_input, num_cats - 9)
+            is_input = torch.cat((is_input, is_input_add), 3)
+            is_input = torch.reshape(is_input, (batchSz, boardSz**2 * boardSz**2 * num_cats))
+
         # FIXME vvvv
         solvable = content[3] if len(content) > 3 and mode not in ('train-backbone-lenet-supervised',) else None
 
-        is_input_mono = is_input.view(-1, 9).float().mean(dim=1).type(torch.bool)
+        is_input_mono = is_input.view(-1, num_cats).float().mean(dim=1).type(torch.bool)
+        # is_input_mono = is_input_original.view(-1, 9).float().mean(dim=1).type(torch.bool)
 
         if to_train: optimizer.zero_grad()
 
         preds, reconstructed = model(data.contiguous(), is_input.contiguous())
         preds = preds.contiguous()
+
+        # zyy
+        # print(data.contiguous().shape)
+        # print(is_input.contiguous().shape)
+        # print(preds.shape)
+        # print(reconstructed.shape)
+        # break
 
         if mode in ('satnet-visual-infogan-generate-dataset',):
             label_set.append(reconstructed.cpu().detach())
@@ -301,22 +332,30 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
             'satnet-visual-infogan-generate-dataset'
         ):
 
-            
-            preds_loss = preds.view(-1, 9)[~is_input_mono, :]
+
+            # preds_loss = preds.view(-1, 9)[~is_input_mono, :]
+            # label_loss = label.view(-1, 9)[~is_input_mono, :]
+            preds_loss = preds.view(-1, num_cats)[~is_input_mono, :]
             label_loss = label.view(-1, 9)[~is_input_mono, :]
 
-            preds = preds*(1 - is_input.float())
-            preds = preds + reconstructed*is_input.float()
+
+            # preds = preds*(1 - is_input_original.float())
+            preds = preds*(1 - is_input.float()) + reconstructed*is_input.float()
+            # zyy
+            # print('haha')
+            # preds = preds + reconstructed.view(-1, num_cats)[:, :9].reshape(-1, 729) * is_input_original.float()
+            # print('heihei')
 
 
-            loss, perm_oh, perm = permutation_invariant_loss(preds_loss, label_loss)
-            plt.imsave('perm.png', perm.detach().cpu().numpy())
+            # loss, perm_oh, perm = permutation_invariant_loss(preds_loss, label_loss)
+            loss, perm_oh, perm = zyy_loss(preds_loss, label_loss, num_cats)
+            plt.imsave('num_cats_{}/perm.png'.format(str(num_cats)), perm.detach().cpu().numpy())
             avg_perm[i] = perm.detach().cpu()
 
 
             # Permute the preds so that they can be evaluated against the labels properly.
             # preds = torch.matmul(to_oh(preds.view(-1, 9)), perm_oh).contiguous().view(-1, 9**3)
-            preds = torch.matmul(to_oh(preds.view(-1, 9)), perm_oh).contiguous().view(-1, 9**3)
+            preds = torch.matmul(to_oh(preds.view(-1, num_cats)), perm_oh).contiguous().view(-1, 9**3)
 
 
         elif mode in ('train-backbone-lenet-supervised', ):
@@ -331,7 +370,7 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
             preds = preds*(1. - is_input.float())
             preds = preds + reconstructed*is_input.float()
 
-            preds = torch.matmul(to_oh(preds.view(-1, 9)), perm_oh).contiguous().view(-1, 9**3)
+            preds = torch.matmul(to_oh(preds.view(-1, num_cats)), perm_oh).contiguous().view(-1, 9**3)
 
 
         else:
@@ -343,7 +382,7 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
             preds = preds + reconstructed*is_input.float()
 
             if perm_oh is not None:
-                preds = torch.matmul(preds.view(-1, 9), perm_oh).contiguous().view(-1, 9**3)
+                preds = torch.matmul(preds.view(-1, num_cats), perm_oh).contiguous().view(-1, 9**3)
 
             if leak_labels:
                 preds_loss = preds
@@ -352,7 +391,12 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
                 preds_loss = preds.view(-1, 9)[~is_input_mono, :]
                 label_loss = label.view(-1, 9)[~is_input_mono, :]
 
+            # print(preds_loss)
+            # print(label_loss)
+            # exit(0)
             loss = F.binary_cross_entropy(preds_loss, label_loss)
+            # exit(0)
+
 
             preds = to_oh(preds.view(-1, 9)).view(-1, 729)
 
@@ -402,7 +446,7 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
 
     # Avg perm
     avg_perm = avg_perm.mean(dim=0)
-    plt.imsave('avg_perm_train.png' if to_train else 'avg_perm_test.png', avg_perm.numpy())
+    plt.imsave('num_cats_{}/avg_perm_train.png'.format(str(num_cats)) if to_train else 'num_cats_{}/avg_perm_test.png'.format(str(num_cats)), avg_perm.numpy())
     img_list.append(avg_perm.numpy())
 
     if to_train and mode in ('train-satnet-visual-infogan',):
@@ -416,12 +460,12 @@ def run(boardSz, epoch, model, optimizer, logger, dataset, batchSz, to_train, un
 
 
 
-def train(args, epoch, model, optimizer, logger, dataset, batchSz, unperm, mode, img_list, leak_labels):
-    return run(args, epoch, model, optimizer, logger, dataset, batchSz, True, unperm, mode, img_list, leak_labels)
+def train(args, epoch, model, optimizer, logger, dataset, batchSz, unperm, mode, img_list, leak_labels, num_cats):
+    return run(args, epoch, model, optimizer, logger, dataset, batchSz, True, unperm, mode, img_list, leak_labels, num_cats)
 
 @torch.no_grad()
-def test(args, epoch, model, optimizer, logger, dataset, batchSz, unperm, mode, img_list, leak_labels):
-    return run(args, epoch, model, optimizer, logger, dataset, batchSz, False, unperm, mode, img_list, leak_labels)
+def test(args, epoch, model, optimizer, logger, dataset, batchSz, unperm, mode, img_list, leak_labels, num_cats):
+    return run(args, epoch, model, optimizer, logger, dataset, batchSz, False, unperm, mode, img_list, leak_labels, num_cats)
 
 @torch.no_grad()
 def computeErr(pred_flat, n, unperm):

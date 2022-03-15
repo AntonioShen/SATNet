@@ -119,7 +119,8 @@ def get_sudoku_nonvisual(data_dir, cuda, perm, num_injected_input_cell_errors=0,
 
     X, Ximg, Y, is_input = _get_sudoku_core_initialize(data_dir)
 
-    # Noisy inputs & solvability
+    # Noisy inputs & solvability bl
+
     data = _inject_input_cell_errors(X, is_input, num_injected_input_cell_errors, solvability)
 
     N = data.size(0)
@@ -130,7 +131,9 @@ def get_sudoku_nonvisual(data_dir, cuda, perm, num_injected_input_cell_errors=0,
     unperm = None
     if perm is not None:
         print('Applying permutation')
-        data[:,:], Y[:,:], is_input[:,:] = data[:,perm], Y[:,perm], is_input[:,perm]
+        # zyy
+        # data[:,:], Y[:,:], is_input[:,:] = data[:,perm], Y[:,perm], is_input[:,perm]
+        Y[:, :] = Y[:,perm]
         unperm = _find_unperm(perm)
 
     train_set, test_set = _get_sudoku_core_datasets(data, is_input, Y, cuda, solvable)
