@@ -1,3 +1,0 @@
-[submodule "exps/sudoku/infogan"]
-	path = exps/sudoku/infogan
-	url = git@github.com:SeverTopan/InfoGAN-PyTorch.git
