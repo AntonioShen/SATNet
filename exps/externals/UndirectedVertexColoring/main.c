@@ -70,21 +70,21 @@ int ColorGraph(Graph *g) //to color the vertex of a graph, the function returns 
   }
   while(1)
   {
-  while(k>=0)
-  {
-	  g->color[k]=g->color[k]+1;
-	  while(g->color[k]<=m)
-	  {
-        if(Conflict(g,k)) break;
-		else g->color[k]=g->color[k]+1;
-	  }
-	  if(g->color[k]<=m && k==g->vertexNum-1)
-		return m;
-	  if(g->color[k]<=m && k<g->vertexNum-1)
-	     k=k+1;
-	  else
-		  g->color[k--]=0;
-  }
+    while(k>=0)
+    {
+        g->color[k]=g->color[k]+1;
+	    while(g->color[k]<=m)
+	    {
+            if(Conflict(g,k)) break;
+		    else g->color[k]=g->color[k]+1;
+	    }
+	    if(g->color[k]<=m && k==g->vertexNum-1)
+	        return m;
+	    if(g->color[k]<=m && k<g->vertexNum-1)
+	        k=k+1;
+	    else
+		    g->color[k--]=0;
+    }
   k=0;
   m++;
   }
