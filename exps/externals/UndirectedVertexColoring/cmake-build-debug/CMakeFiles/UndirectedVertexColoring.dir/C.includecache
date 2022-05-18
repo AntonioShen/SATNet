@@ -1,0 +1,14 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/AntonioShen/MLProjects/SATNet/exps/externals/UndirectedVertexColoring/main.c
+stdio.h
+-
+stdlib.h
+-
+
