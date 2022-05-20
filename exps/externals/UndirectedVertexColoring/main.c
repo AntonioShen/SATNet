@@ -11,14 +11,14 @@ typedef struct{
     int *arc;      //points to the array of graph's relations
     int *color;    //points to the vertex coloring in the graph
 }Graph;
-void creatGraph(Graph *g);
+void createGraph(Graph *g);
 int ColorGraph(Graph *g);
 int Conflict(Graph *g,int k);
 void dispVertexColor(Graph *g);
 int main()
 {
 	Graph g; //declare a graph g
-	creatGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
+	createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
 	int m=ColorGraph(&g);
 	printf("%d",m);
 	dispVertexColor(&g);
@@ -29,7 +29,7 @@ int main()
  * defines the graph's vertex number and edge number
  * The graph's adjacency matrix and the coloring array
  **/
-void creatGraph(Graph *g)
+void createGraph(Graph *g)
 {
     int x,y,k,w;
     scanf("%d %d",&g->vertexNum,&g->arcNum);
