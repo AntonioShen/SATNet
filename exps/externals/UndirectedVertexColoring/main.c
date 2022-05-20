@@ -15,8 +15,19 @@ void createGraph(Graph *g);
 int ColorGraph(Graph *g);
 int Conflict(Graph *g,int k);
 void dispVertexColor(Graph *g);
+const int size = 10; //defines the number of vertices in the graph
 int main()
 {
+    int adj_mat[size][size];
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            adj_mat[i][j] = 0;
+        }
+    }
+    
+    FILE *my_file;
+    my_file = fopen("../test.csv", "w");
+    fclose(my_file);
 	Graph g; //declare a graph g
 	createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
 	int m=ColorGraph(&g);
