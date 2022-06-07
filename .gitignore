@@ -1,4 +1,5 @@
 .idea/
 ENV/
+ENV_prev/
 gpu-request.sh
 PAT.txt
