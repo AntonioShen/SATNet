@@ -18,16 +18,14 @@ void dispVertexColor(Graph *g);
 const int size = 10; //defines the number of vertices in the graph
 int main()
 {
-    int adj_mat[size][size];
-    for (int i = 0; i < size; i++) {
-        for (int j = 0; j < size; j++) {
-            adj_mat[i][j] = 0;
-        }
-    }
-    
-    FILE *my_file;
-    my_file = fopen("../test.csv", "w");
-    fclose(my_file);
+//    FILE *adj_list;
+//    adj_list = fopen("../../../myexps/adj_list.sst", "r");
+//    char * line = NULL;
+//    size_t len = 0;
+//    while (getline(&line, &len, adj_list)) {
+//        printf("%s", line);
+//    }
+//    fclose(adj_list);
 	Graph g; //declare a graph g
 	createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
 	int m=ColorGraph(&g);
@@ -43,7 +41,12 @@ int main()
 void createGraph(Graph *g)
 {
     int x,y,k,w;
-    scanf("%d %d",&g->vertexNum,&g->arcNum);
+    FILE *adj_list;
+    adj_list = fopen("../../../myexps/adj_list.sst", "r");
+    char * line = NULL;
+    size_t len = 0;
+    getline(&line, &len, adj_list);
+    sscanf(line, "%d %d",&g->vertexNum,&g->arcNum);
     g->arc=(int*)malloc(sizeof(int)*g->vertexNum*g->vertexNum); //create adjacency matrix
     g->color=(int*)malloc(sizeof(int)*g->vertexNum); //create coloring array
     if(g->vertexNum==1&&g->arcNum==0)
@@ -58,10 +61,12 @@ void createGraph(Graph *g)
         g->color[x]=0; //initialize the shaded record array element to 0, i.e., colorless
     }
     for (k = 0; k < g->arcNum; k++){ //the correlation matrix is a symmetric matrix
-        scanf("%d %d %d",&x,&y,&w);
+        getline(&line, &len, adj_list);
+        sscanf(line, "%d %d %d",&x,&y,&w);
         g->arc[g->vertexNum*x+y]=w; //store the associated edge length in the matrix x row y column of the graph
         g->arc[g->vertexNum*y+x]=w; //store the associated edge length in the matrix y row x column of the graph
     }
+    fclose(adj_list);
 }
 void dispVertexColor(Graph *g) //output the coloring function of each vertex in graph g
 {
