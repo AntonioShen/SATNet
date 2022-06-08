@@ -15,7 +15,9 @@ void createGraph(Graph *g);
 int ColorGraph(Graph *g);
 int Conflict(Graph *g,int k);
 void dispVertexColor(Graph *g);
-const int size = 10; //defines the number of vertices in the graph
+FILE *adj_list;
+char * line = NULL;
+size_t len = 0;
 int main()
 {
 //    FILE *adj_list;
@@ -26,11 +28,13 @@ int main()
 //        printf("%s", line);
 //    }
 //    fclose(adj_list);
+    adj_list = fopen("../../../myexps/adj_list.sst", "r");
 	Graph g; //declare a graph g
 	createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
 	int m=ColorGraph(&g);
 	printf("%d",m);
 	dispVertexColor(&g);
+    fclose(adj_list);
 	return 0;
 }
 /**
@@ -41,10 +45,6 @@ int main()
 void createGraph(Graph *g)
 {
     int x,y,k,w;
-    FILE *adj_list;
-    adj_list = fopen("../../../myexps/adj_list.sst", "r");
-    char * line = NULL;
-    size_t len = 0;
     getline(&line, &len, adj_list);
     sscanf(line, "%d %d",&g->vertexNum,&g->arcNum);
     g->arc=(int*)malloc(sizeof(int)*g->vertexNum*g->vertexNum); //create adjacency matrix
@@ -66,7 +66,6 @@ void createGraph(Graph *g)
         g->arc[g->vertexNum*x+y]=w; //store the associated edge length in the matrix x row y column of the graph
         g->arc[g->vertexNum*y+x]=w; //store the associated edge length in the matrix y row x column of the graph
     }
-    fclose(adj_list);
 }
 void dispVertexColor(Graph *g) //output the coloring function of each vertex in graph g
 {
