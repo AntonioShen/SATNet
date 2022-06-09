@@ -3,3 +3,5 @@ ENV/
 ENV_prev/
 gpu-request.sh
 PAT.txt
+adj_list.sst
+coloring.csv

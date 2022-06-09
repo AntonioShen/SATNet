@@ -18,24 +18,15 @@ void dispVertexColor(Graph *g);
 FILE *adj_list;
 char * line = NULL;
 size_t len = 0;
-int main()
+void solution()
 {
-//    FILE *adj_list;
-//    adj_list = fopen("../../../myexps/adj_list.sst", "r");
-//    char * line = NULL;
-//    size_t len = 0;
-//    while (getline(&line, &len, adj_list)) {
-//        printf("%s", line);
-//    }
-//    fclose(adj_list);
-    adj_list = fopen("../../../myexps/adj_list.sst", "r");
+    adj_list = fopen("production/adj_list.sst", "r");
 	Graph g; //declare a graph g
 	createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
 	int m=ColorGraph(&g);
-	printf("%d",m);
+//	printf("%d",m);
 	dispVertexColor(&g);
     fclose(adj_list);
-	return 0;
 }
 /**
  * The following creatGraph() function
@@ -55,24 +46,31 @@ void createGraph(Graph *g)
         g->color[0]=1;
         return;
     }
-    for(x = 0;x < g->vertexNum;x++){ //the element in the initial adjacency matrix is INFINITY, that is, the vertices are not connected
-        for(y = 0;y < g->vertexNum;y++)
+    for (x = 0;x < g->vertexNum;x++) { //the element in the initial adjacency matrix is INFINITY, that is, the vertices are not connected
+        for (y = 0;y < g->vertexNum;y++)
             g->arc[g->vertexNum * x + y]=INFINITY;
         g->color[x]=0; //initialize the shaded record array element to 0, i.e., colorless
     }
-    for (k = 0; k < g->arcNum; k++){ //the correlation matrix is a symmetric matrix
+    for (k = 0; k < g->arcNum; k++) {  //the correlation matrix is a symmetric matrix
         getline(&line, &len, adj_list);
         sscanf(line, "%d %d %d",&x,&y,&w);
         g->arc[g->vertexNum*x+y]=w; //store the associated edge length in the matrix x row y column of the graph
         g->arc[g->vertexNum*y+x]=w; //store the associated edge length in the matrix y row x column of the graph
     }
 }
+
 void dispVertexColor(Graph *g) //output the coloring function of each vertex in graph g
 {
-    printf("[");
-    for(int i = 0;i < g->vertexNum - 1; i++)
-        printf("%d,",g->color[i]);
-    printf("%d]\n",g->color[g->vertexNum - 1]);
+//    printf("[");
+//    for(int i = 0;i < g->vertexNum - 1; i++)
+//        printf("%d,",g->color[i]);
+//    printf("%d]\n",g->color[g->vertexNum - 1]);
+    FILE *coloring_file = fopen("production/coloring.csv", "w");
+    fprintf(coloring_file, "%d", g->color[0]);
+    for (int i = 1;i < g->vertexNum; i++) {
+        fprintf(coloring_file, ",%d", g->color[i]);
+    }
+    fclose(coloring_file);
 }
 
 int ColorGraph(Graph *g) //to color the vertex of a graph, the function returns the minimum chromatic number

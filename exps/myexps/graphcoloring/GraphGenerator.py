@@ -35,9 +35,9 @@ def extract_adj_list(mat):
     return v_num, e_num, adj_list
 
 
-def write_overheads_adj_list(mat, file_path="adj_list.sst"):
+def write_overheads_adj_list(mat, file_path="production/adj_list.sst"):
     v_num, e_num, adj_list = extract_adj_list(mat)
-    file = open(file_path, "a")
+    file = open(file_path, "w")
     file.writelines(str(v_num) + " " + str(e_num) + '\n')  # Writing overheads.
     adj_list_str = np.array2string(np.array(adj_list), separator=",", threshold=(e_num * 8))
     adj_list_str = adj_list_str.translate({ord(i): None for i in '[] .'})
