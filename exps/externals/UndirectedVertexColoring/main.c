@@ -21,11 +21,11 @@ size_t len = 0;
 void solution()
 {
     adj_list = fopen("production/adj_list.sst", "r");
-	Graph g; //declare a graph g
-	createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
-	int m=ColorGraph(&g);
+    Graph g; //declare a graph g
+    createGraph(&g); //create a graph based on the vertex number, edge number and relations between vertices
+    int m=ColorGraph(&g);
 //	printf("%d",m);
-	dispVertexColor(&g);
+    dispVertexColor(&g);
     fclose(adj_list);
 }
 /**
@@ -75,39 +75,39 @@ void dispVertexColor(Graph *g) //output the coloring function of each vertex in 
 
 int ColorGraph(Graph *g) //to color the vertex of a graph, the function returns the minimum chromatic number
 {
-  int k=0,m=1;
-  if(g->vertexNum==1 && g->arcNum==0)
-  {
-	  g->color[0]=1;
-	  return m;
-  }
-  while(1)
-  {
-    while(k>=0)
+    int k=0,m=1;
+    if(g->vertexNum==1 && g->arcNum==0)
     {
-        g->color[k]=g->color[k]+1;
-	    while(g->color[k]<=m)
-	    {
-            if(Conflict(g,k)) break;
-		    else g->color[k]=g->color[k]+1;
-	    }
-	    if(g->color[k]<=m && k==g->vertexNum-1)
-	        return m;
-	    if(g->color[k]<=m && k<g->vertexNum-1)
-	        k=k+1;
-	    else
-		    g->color[k--]=0;
+        g->color[0]=1;
+        return m;
     }
-  k=0;
-  m++;
-  }
+    while(1)
+    {
+        while(k>=0)
+        {
+            g->color[k]=g->color[k]+1;
+            while(g->color[k]<=m)
+            {
+                if(Conflict(g,k)) break;
+                else g->color[k]=g->color[k]+1;
+            }
+            if(g->color[k]<=m && k==g->vertexNum-1)
+                return m;
+            if(g->color[k]<=m && k<g->vertexNum-1)
+                k=k+1;
+            else
+                g->color[k--]=0;
+        }
+        k=0;
+        m++;
+    }
 }
 int Conflict(Graph *g,int k) //this function is called by ColorGraph() to check whether vertex K and its adjacent point shaders clash. Returns 1 for no conflict and 0 for conflict
 {
-	for(int i=0;i<k;i++)
- 	{
-		if(g->arc[g->vertexNum*k+i]!=255&&g->color[i]==g->color[k])
-			return 0;
-	}
-	return 1;
+    for(int i=0;i<k;i++)
+    {
+        if(g->arc[g->vertexNum*k+i]!=255&&g->color[i]==g->color[k])
+            return 0;
+    }
+    return 1;
 }
