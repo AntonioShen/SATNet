@@ -1,0 +1,1 @@
+# This folder will contain files that will be produced along the execution of the pipeline program.
