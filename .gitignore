@@ -5,3 +5,4 @@ gpu-request.sh
 PAT.txt
 adj_list.sst
 coloring.csv
+*.pt

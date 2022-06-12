@@ -3,6 +3,7 @@ from GraphGenerator import create_rand_adj_mat
 from GraphGenerator import write_overheads_adj_list
 from tqdm import tqdm
 import numpy as np
+import torch
 
 
 def mapping_by_coloring(max_color_count, mat, coloring_path="production/coloring.csv", flattening=True, encoder="normal"):
@@ -49,14 +50,17 @@ def to_catalog_2d(mat, offset=0, catalog=0, flattening=True):   # Catalog number
         return temp
 
 
-def data_pipeline(v_num, padding=False, encoder="normal"):
+def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False):
     quantity = 2 ** (v_num * v_num - v_num)
     catalog = v_num + 1
     if quantity > 6000:
         quantity = 6000
     data = 0
     label = 0
-    so_file = "UndirectedVertexColoringSolver.so"
+    if abs_path:
+        so_file = "/home/xingshen/projects/def-six/xingshen/SATNet/exps/myexps/graphcoloring/UndirectedVertexColoringSolver.so"
+    else:
+        so_file = "UndirectedVertexColoringSolver.so"
     resolve_coloring = CDLL(so_file)
     if not padding:
         mat_size = v_num
@@ -92,14 +96,12 @@ def data_pipeline(v_num, padding=False, encoder="normal"):
     return data, label
 
 
-v_num = 2
+v_num = 10
 dataset, label = data_pipeline(v_num, encoder="reversed")
 data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], dataset.shape[1])),
                   np.reshape(label, (1, label.shape[0], label.shape[1]))))
 print(data)
-print("Saving dataset to production/VNUM_" + str(v_num) + "_DATA_ARRAY.npy")
-with open("production/VNUM_" + str(v_num) + "_DATA_ARRAY.npy", "wb") as f:
-    np.save(f, data)
+data_tensor = torch.from_numpy(data)
+print("Saving dataset to production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
+torch.save(data_tensor, "production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
 print("Saved")
-with open("production/VNUM_" + str(v_num) + "_DATA_ARRAY.npy", "rb") as f:
-    a = np.load(f)
