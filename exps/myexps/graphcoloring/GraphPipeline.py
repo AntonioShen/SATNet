@@ -50,7 +50,7 @@ def to_catalog_2d(mat, offset=0, catalog=0, flattening=True):   # Catalog number
         return temp
 
 
-def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False):
+def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flattening=True):
     quantity = 2 ** (v_num * v_num - v_num)
     catalog = v_num + 1
     if quantity > 6000:
@@ -71,11 +71,11 @@ def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False):
             write_overheads_adj_list(mat)
             resolve_coloring.solution()
             if i == 0:
-                data = to_catalog_2d(mat, catalog=catalog)
-                label = mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder)
+                data = to_catalog_2d(mat, catalog=catalog, flattening=flattening)
+                label = mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder, flattening=flattening)
             else:
-                data = np.vstack((data, to_catalog_2d(mat, catalog=catalog)))
-                label = np.vstack((label, mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder)))
+                data = np.vstack((data, to_catalog_2d(mat, catalog=catalog, flattening=flattening)))
+                label = np.vstack((label, mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder, flattening=flattening)))
     elif encoder == "reversed":
         for i in tqdm(range(quantity)):
             mat = create_rand_adj_mat(size=mat_size)
@@ -86,22 +86,25 @@ def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False):
             mat[mat == 1] = 0
             mat[mat == 2] = 1
             if i == 0:
-                data = to_catalog_2d(mat, catalog=catalog)
-                label = mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder)
+                data = to_catalog_2d(mat, catalog=catalog, flattening=flattening)
+                label = mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder, flattening=flattening)
             else:
-                data = np.vstack((data, to_catalog_2d(mat, catalog=catalog)))
-                label = np.vstack((label, mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder)))
+                data = np.vstack((data, to_catalog_2d(mat, catalog=catalog, flattening=flattening)))
+                label = np.vstack((label, mapping_by_coloring(max_color_count=v_num, mat=mat, encoder=encoder, flattening=flattening)))
     print(data.shape)
     print(label.shape)
     return data, label
 
 
-v_num = 10
-dataset, label = data_pipeline(v_num, encoder="reversed")
-data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], dataset.shape[1])),
-                  np.reshape(label, (1, label.shape[0], label.shape[1]))))
-print(data)
+v_num = 4
+dataset, label = data_pipeline(v_num, encoder="reversed")   # Flattening=True
+# data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], dataset.shape[1])),
+#                   np.reshape(label, (1, label.shape[0], label.shape[1]))))
+data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], v_num, v_num, v_num + 1)),
+                  np.reshape(label, (1, label.shape[0], v_num, v_num, v_num + 1))))
+print(data.shape)
 data_tensor = torch.from_numpy(data)
+# Shape: (2, :, v_num, v_num, v_num + 1)
 print("Saving dataset to production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
 torch.save(data_tensor, "production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
 print("Saved")
