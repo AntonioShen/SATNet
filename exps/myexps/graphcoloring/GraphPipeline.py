@@ -51,10 +51,10 @@ def to_catalog_2d(mat, offset=0, catalog=0, flattening=True):   # Catalog number
 
 
 def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flattening=True):
-    quantity = 2 ** (v_num * v_num - v_num)
+    quantity = 2 ** ((v_num * v_num - v_num) / 2)
     catalog = v_num + 1
-    if quantity > 6000:
-        quantity = 6000
+    if quantity > 10000:
+        quantity = 10000
     data = 0
     label = 0
     if abs_path:
@@ -96,7 +96,7 @@ def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flatte
     return data, label
 
 
-v_num = 4
+v_num = 6
 dataset, label = data_pipeline(v_num, encoder="reversed")   # Flattening=True
 # data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], dataset.shape[1])),
 #                   np.reshape(label, (1, label.shape[0], label.shape[1]))))

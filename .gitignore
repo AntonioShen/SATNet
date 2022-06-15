@@ -1,8 +1,14 @@
 .idea/
 ENV/
 ENV_prev/
+ENV3_8/
+build/
 gpu-request.sh
 PAT.txt
 adj_list.sst
 coloring.csv
 *.pt
+install.log
+core.*
+satnet/
+satnet.egg-info/
