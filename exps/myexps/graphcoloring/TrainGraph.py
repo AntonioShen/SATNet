@@ -169,7 +169,7 @@ graph_coloring_model = graph_coloring_model.cuda()
 plt.ioff()
 optimizer = optim.Adam(graph_coloring_model.parameters(), lr=lr)
 
-fig, axes = plt.subplots(1, 2, figsize=(10,4))
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 plt.subplots_adjust(wspace=0.4)
 train_logger = FigLogger(fig, axes[0], 'Traininig')
 test_logger = FigLogger(fig, axes[1], 'Testing')
