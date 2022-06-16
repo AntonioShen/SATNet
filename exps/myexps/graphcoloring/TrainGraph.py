@@ -118,41 +118,10 @@ def computeErr(pred_flat, n, unperm, label_flat):
 
     return float(batch_size - correct_count)
 
-    # if unperm is not None: pred_flat[:, :] = pred_flat[:, unperm]
-    #
-    # nsq = n
-    # pred = pred_flat.view(-1, nsq, nsq, nsq + 1)
-    #
-    # batchSz = pred.size(0)
-    # s = (nsq - 1) * nsq // 2  # 0 + 1 + ... + n^2-1
-    # I = torch.max(pred, 3)[1].squeeze().view(batchSz, nsq, nsq)
-    #
-    # def invalidGroups(x):
-    #     valid = (x.min(1)[0] == 0)
-    #     valid *= (x.max(1)[0] == nsq - 1)
-    #     valid *= (x.sum(1) == s)
-    #     return valid.bitwise_not()
-    #
-    # boardCorrect = torch.ones(batchSz).type_as(pred)
-    # for j in range(nsq):
-    #     # Check the jth row and column.
-    #     boardCorrect[invalidGroups(I[:, j, :])] = 0
-    #     boardCorrect[invalidGroups(I[:, :, j])] = 0
-    #
-    #     # Check the jth block.
-    #     row, col = n * (j // n), n * (j % n)
-    #     M = invalidGroups(I[:, row:row + n, col:col + n].contiguous().view(batchSz, -1))
-    #     boardCorrect[M] = 0
-    #
-    #     if boardCorrect.sum() == 0:
-    #         return batchSz
 
-    # return float(batchSz - boardCorrect.sum())
-
-
-v_num = 6
-aux = 300
-m = 600
+v_num = 8
+aux = 1000
+m = 800
 lr = 2e-3
 batchSz = 40
 nEpoch = 100
