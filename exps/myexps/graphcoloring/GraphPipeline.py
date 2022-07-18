@@ -51,10 +51,10 @@ def to_catalog_2d(mat, offset=0, catalog=0, flattening=True):   # Catalog number
 
 
 def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flattening=True):
-    quantity = 2 ** ((v_num * v_num - v_num) / 2)
+    quantity = int(2 ** ((v_num * v_num - v_num) / 2))
     catalog = v_num + 1
-    if quantity > 10000:
-        quantity = 10000
+    if quantity > 40000:
+        quantity = 40000
     data = 0
     label = 0
     if abs_path:
@@ -65,9 +65,14 @@ def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flatte
     if not padding:
         mat_size = v_num
     print("Creating graph dataset: " + str(quantity) + " graphs " + encoder)
+    # A dictionary to remove identical inputs.
+    dict = {}
     if encoder == "normal":
         for i in tqdm(range(quantity)):
             mat = create_rand_adj_mat(size=mat_size)
+            while str(mat) in dict:
+                mat = create_rand_adj_mat(size=mat_size)
+            dict[str(mat)] = i
             write_overheads_adj_list(mat)
             resolve_coloring.solution()
             if i == 0:
@@ -79,9 +84,13 @@ def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flatte
     elif encoder == "reversed":
         for i in tqdm(range(quantity)):
             mat = create_rand_adj_mat(size=mat_size)
+            while str(mat) in dict:
+                mat = create_rand_adj_mat(size=mat_size)
+            dict[str(mat)] = i
             write_overheads_adj_list(mat)
             resolve_coloring.solution()
             mat = np.array(mat)
+            # Reverse 0s and 1s
             mat[mat == 0] = 2
             mat[mat == 1] = 0
             mat[mat == 2] = 1
@@ -96,8 +105,9 @@ def data_pipeline(v_num, padding=False, encoder="normal", abs_path=False, flatte
     return data, label
 
 
-v_num = 6
+v_num = 8
 dataset, label = data_pipeline(v_num, encoder="reversed")   # Flattening=True
+
 # data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], dataset.shape[1])),
 #                   np.reshape(label, (1, label.shape[0], label.shape[1]))))
 data = np.vstack((np.reshape(dataset, (1, dataset.shape[0], v_num, v_num, v_num + 1)),
