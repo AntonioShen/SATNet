@@ -1,5 +1,6 @@
 file(REMOVE_RECURSE
   "CMakeFiles/UndirectedVertexColoring.dir/main.c.o"
+  "CMakeFiles/UndirectedVertexColoring.dir/test.c.o"
   "UndirectedVertexColoring"
   "UndirectedVertexColoring.pdb"
 )

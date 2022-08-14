@@ -78,7 +78,13 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="/Users/AntonioShen/MLProjects/SATNet/exps/externals/UndirectedVertexColoring/alternative.txt">
+			<Option target="UndirectedVertexColoring"/>
+		</Unit>
 		<Unit filename="/Users/AntonioShen/MLProjects/SATNet/exps/externals/UndirectedVertexColoring/main.c">
+			<Option target="UndirectedVertexColoring"/>
+		</Unit>
+		<Unit filename="/Users/AntonioShen/MLProjects/SATNet/exps/externals/UndirectedVertexColoring/test.c">
 			<Option target="UndirectedVertexColoring"/>
 		</Unit>
 		<Unit filename="/Users/AntonioShen/MLProjects/SATNet/exps/externals/UndirectedVertexColoring/CMakeLists.txt">

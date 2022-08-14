@@ -2,6 +2,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
+import wandb
 from tqdm.auto import tqdm
 from matplotlib import pyplot as plt
 
@@ -95,6 +96,10 @@ def run(v_num, epoch, model, optimizer, logger, dataset, batchSz, to_train=False
     loss_final, err_final, err_ch_num_final = loss_final / len(loader), err_final / len(loader), err_ch_num_final / len(
         loader)
     logger.log((epoch, loss_final, err_final))
+    if to_train:
+        wandb.log({"train_loss": loss_final, "train_whole_error": err_final, "train_chromatic_error": err_ch_num_final})
+    else:
+        wandb.log({"test_loss": loss_final, "test_whole_error": err_final, "test_chromatic_error": err_ch_num_final})
 
     if not to_train:
         print('TESTING SET RESULTS: Average loss: {:.4f} Err(whole board): {:.4f} Err(chromatic): {:.4f}'.format(
@@ -174,36 +179,52 @@ def computeErr(pred_flat, n, unperm, label_flat):
     return float(batch_size - correct_count), float(batch_size - correct_count_ch_num)
 
 
-v_num = 8
-aux = 600
-m = 300
-lr = 2e-3
-batchSz = 40
-nEpoch = 100
+def main():
+    # Wandb
+    wandb.init(project="graph_sat", entity="xingshen")
 
-X_in, Y_in, is_input = get_dataset_cuda("production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
-N = X_in.size(0)
-n_train = int(N * 0.9)
-print(X_in.shape, Y_in.shape, is_input.shape)
-graph_coloring_train = TensorDataset(X_in[:n_train], is_input[:n_train], Y_in[:n_train])
-graph_coloring_test = TensorDataset(X_in[n_train:], is_input[n_train:], Y_in[n_train:])
-graph_coloring_model = GraphColoringSolver(v_num, aux, m)
-graph_coloring_model = graph_coloring_model.cuda()
+    v_num = 8
+    aux = 600
+    m = 500
+    lr = 2e-3
+    batchSz = 40
+    nEpoch = 100
+    wandb.config = {
+        "vertices": v_num,
+        "aux": aux,
+        "m": m,
+        "learning_rate": lr,
+        "batch_size": batchSz,
+        "epochs": nEpoch
+    }
 
-plt.ioff()
-optimizer = optim.Adam(graph_coloring_model.parameters(), lr=lr)
+    X_in, Y_in, is_input = get_dataset_cuda("production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
+    N = X_in.size(0)
+    n_train = int(N * 0.9)
+    print(X_in.shape, Y_in.shape, is_input.shape)
+    graph_coloring_train = TensorDataset(X_in[:n_train], is_input[:n_train], Y_in[:n_train])
+    graph_coloring_test = TensorDataset(X_in[n_train:], is_input[n_train:], Y_in[n_train:])
+    graph_coloring_model = GraphColoringSolver(v_num, aux, m)
+    graph_coloring_model = graph_coloring_model.cuda()
 
-fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-plt.subplots_adjust(wspace=0.4)
-train_logger = FigLogger(fig, axes[0], 'Traininig')
-test_logger = FigLogger(fig, axes[1], 'Testing')
+    plt.ioff()
+    optimizer = optim.Adam(graph_coloring_model.parameters(), lr=lr)
 
-test(v_num, 0, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
-plt.pause(0.01)
-for epoch in range(1, nEpoch + 1):
-    train(v_num, epoch, graph_coloring_model, optimizer, train_logger, graph_coloring_train, batchSz)
-    test(v_num, epoch, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
-    if (epoch % 20) == 0:
-        torch.save(graph_coloring_model.state_dict(), './production/weights_VNUM_' + str(v_num) + '_AUX_'
-                   + str(aux) + '_M_' + str(m) + '_LR_' + str(lr) + '_BATCSZ_' + str(batchSz) + '_EP_' + str(
-            epoch) + '.pt')
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    plt.subplots_adjust(wspace=0.4)
+    train_logger = FigLogger(fig, axes[0], 'Traininig')
+    test_logger = FigLogger(fig, axes[1], 'Testing')
+
+    test(v_num, 0, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
+    plt.pause(0.01)
+    for epoch in range(1, nEpoch + 1):
+        train(v_num, epoch, graph_coloring_model, optimizer, train_logger, graph_coloring_train, batchSz)
+        test(v_num, epoch, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
+        if (epoch % 20) == 0:
+            torch.save(graph_coloring_model.state_dict(), './production/weights_VNUM_' + str(v_num) + '_AUX_'
+                       + str(aux) + '_M_' + str(m) + '_LR_' + str(lr) + '_BATCSZ_' + str(batchSz) + '_EP_' + str(
+                epoch) + '.pt')
+
+
+if __name__ == "__main__":
+    main()

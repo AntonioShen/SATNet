@@ -3,3 +3,5 @@
 
 CMakeFiles/UndirectedVertexColoring.dir/main.c.o: ../main.c
 
+CMakeFiles/UndirectedVertexColoring.dir/test.c.o: ../test.c
+
