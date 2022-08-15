@@ -1,3 +1,6 @@
+import getopt
+from sys import argv
+
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -180,6 +183,22 @@ def computeErr(pred_flat, n, unperm, label_flat):
 
 
 def main():
+    partial = 'False'
+    try:
+        opts, args = getopt.getopt(argv, "hp:", ["partially-colored="])
+    except getopt.GetoptError:
+        print()
+    for opt, arg in opts:
+        if opt == '-h':
+            print('TrainGraph.py -p <True/False>')
+            exit()
+        elif opt in ("-p", "--partially-colored"):
+            if arg != 'True' and arg != 'true' and arg != 'T' and arg != 't' and arg != 'False' and arg != 'false' and arg != 'F' and arg != 'f':
+                print('TrainGraph.py -p <True/False>')
+                exit()
+            else:
+                partial = arg
+
     # Wandb
     wandb.init(project="graph_sat", entity="xingshen")
 
@@ -199,6 +218,7 @@ def main():
     }
 
     X_in, Y_in, is_input = get_dataset_cuda("production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
+    
     N = X_in.size(0)
     n_train = int(N * 0.9)
     print(X_in.shape, Y_in.shape, is_input.shape)
