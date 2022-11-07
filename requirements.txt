@@ -4,3 +4,4 @@ requests
 py-sudoku
 matplotlib
 scipy
+wandb

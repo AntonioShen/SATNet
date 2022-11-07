@@ -1,5 +1,5 @@
 import getopt
-from sys import argv
+import sys
 
 import torch
 import torch.optim as optim
@@ -182,32 +182,8 @@ def computeErr(pred_flat, n, unperm, label_flat):
     return float(batch_size - correct_count), float(batch_size - correct_count_ch_num)
 
 
-def main():
-    partial = 'False'
-    try:
-        opts, args = getopt.getopt(argv, "hp:", ["partially-colored="])
-    except getopt.GetoptError:
-        print()
-    for opt, arg in opts:
-        if opt == '-h':
-            print('TrainGraph.py -p <True/False>')
-            exit()
-        elif opt in ("-p", "--partially-colored"):
-            if arg != 'True' and arg != 'true' and arg != 'T' and arg != 't' and arg != 'False' and arg != 'false' and arg != 'F' and arg != 'f':
-                print('TrainGraph.py -p <True/False>')
-                exit()
-            else:
-                partial = arg
-
-    # Wandb
+def test_model(v_num, aux, m, lr, batchSz, nEpoch, graph_coloring_model, optimizer, test_logger, graph_coloring_test):
     wandb.init(project="graph_sat", entity="xingshen")
-
-    v_num = 8
-    aux = 600
-    m = 500
-    lr = 2e-3
-    batchSz = 40
-    nEpoch = 100
     wandb.config = {
         "vertices": v_num,
         "aux": aux,
@@ -216,9 +192,31 @@ def main():
         "batch_size": batchSz,
         "epochs": nEpoch
     }
+    for epoch in range(1, nEpoch + 1):
+        test(v_num, epoch, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
 
-    X_in, Y_in, is_input = get_dataset_cuda("production/VNUM_" + str(v_num) + "_DATA_ARRAY.pt")
-    
+
+def main():
+    pt_file = ''
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hf:", ["pt-file="])
+    except getopt.GetoptError:
+        print('TrainGraph.py --pt-file <path>')
+    for opt, arg in opts:
+        if opt == '-h':
+            print('TrainGraph.py --pt-file <path>')
+            exit()
+        elif opt in ("-f", "--pt-file"):
+            pt_file = arg
+
+    v_num = 10
+    aux = 600
+    m = 1500
+    lr = 2e-3
+    batchSz = 40
+    nEpoch = 100
+
+    X_in, Y_in, is_input = get_dataset_cuda(pt_file)
     N = X_in.size(0)
     n_train = int(N * 0.9)
     print(X_in.shape, Y_in.shape, is_input.shape)
@@ -235,13 +233,25 @@ def main():
     train_logger = FigLogger(fig, axes[0], 'Traininig')
     test_logger = FigLogger(fig, axes[1], 'Testing')
 
+    # Wandb
+    wandb.init(project="graph_sat", entity="xingshen")
+
+    wandb.config = {
+        "vertices": v_num,
+        "aux": aux,
+        "m": m,
+        "learning_rate": lr,
+        "batch_size": batchSz,
+        "epochs": nEpoch
+    }
+
     test(v_num, 0, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
     plt.pause(0.01)
     for epoch in range(1, nEpoch + 1):
         train(v_num, epoch, graph_coloring_model, optimizer, train_logger, graph_coloring_train, batchSz)
         test(v_num, epoch, graph_coloring_model, optimizer, test_logger, graph_coloring_test, batchSz)
         if (epoch % 20) == 0:
-            torch.save(graph_coloring_model.state_dict(), './production/weights_VNUM_' + str(v_num) + '_AUX_'
+            torch.save(graph_coloring_model.state_dict(), './production/weights_' + pt_file.replace('.pt', '').replace('production/', '') + '_AUX_'
                        + str(aux) + '_M_' + str(m) + '_LR_' + str(lr) + '_BATCSZ_' + str(batchSz) + '_EP_' + str(
                 epoch) + '.pt')
 
